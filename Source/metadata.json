@@ -1,0 +1,18 @@
+{
+  "Continued": false,
+  "CanAdd": "0",
+  "CanRemove": "0",
+  "LastXmlCleaning": "2025-09-18T23:35:07.2053958+02:00",
+  "SocialImageSet": true,
+  "FundingSet": true,
+  "Patches": false,
+  "Defs": false,
+  "Assemblies": true,
+  "LinesOfCode": 29934,
+  "LinesOfXML": 0,
+  "SearchTags": [
+    " mod troubleshooting",
+    " error identification"
+  ],
+  "PreviewVersion": "1.6"
+}

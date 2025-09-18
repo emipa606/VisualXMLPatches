@@ -1,0 +1,5 @@
+# Changelog for VisualXMLPatches
+
+1.6.0 - First publish
+Used DeepL to update translations for ChineseSimplified, French, German
+

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LanguageData>
+  <VXP.ModVersion>Installed mod-version: {0}</VXP.ModVersion>
+  <VXP.Search>Patch type, mod name, xpath, filename, attribute, xml value</VXP.Search>
+  <VXP.FoundPatches>Total applied patches: {0}</VXP.FoundPatches>
+  <VXP.Open>Open</VXP.Open>
+</LanguageData>
