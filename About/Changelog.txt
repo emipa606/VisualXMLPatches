@@ -1,5 +1,8 @@
 # Changelog for VisualXMLPatches
 
+1.6.1 - Update to see if Steam auto-mod wakes up
+
+
 1.6.0 - First publish
 Used DeepL to update translations for ChineseSimplified, French, German
 

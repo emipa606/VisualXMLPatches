@@ -1,4 +1,4 @@
-# [Visual XML Patches]()
+# [Visual XML Patches](https://steamcommunity.com/sharedfiles/filedetails/?id=3570531169)
 
 ![Image](https://i.imgur.com/iCj5o7O.png)
 
@@ -7,6 +7,7 @@ It will show the order they are applied, what mod they are from and you can open
 If a patch is not applied due to some error, this will be marked in red.
 
 I made it mostly for my own use but hopefully this will be of some use to someone!
+Using this and the [Unified XML Export]( https://steamcommunity.com/sharedfiles/filedetails/?id=2363322287) makes XML debugging much easier!
 
 ![Image](https://i.imgur.com/Ds0rBAD.png)
 
@@ -26,4 +27,6 @@ Since modding is just a hobby for me I expect no donations to keep modding. If y
 -  If you have the solution for a problem, please post it to the GitHub repository.
 -  Use [RimSort](https://github.com/RimSort/RimSort/releases/latest) to sort your mods
 
+ 
 
+[![Image](https://img.shields.io/github/v/release/emipa606/VisualXMLPatches?label=latest%20version&style=plastic&labelColor=0070cd&color=white)](https://steamcommunity.com/sharedfiles/filedetails/changelog/3570531169) | tags:  mod troubleshooting,  error identification

@@ -27,6 +27,7 @@ It will show the order they are applied, what mod they are from and you can open
 If a patch is not applied due to some error, this will be marked in red.
 
 I made it mostly for my own use but hopefully this will be of some use to someone!
+Using this and the [url= https://steamcommunity.com/sharedfiles/filedetails/?id=2363322287]Unified XML Export[/url] makes XML debugging much easier!
 
 [table]
     [tr]
@@ -53,6 +54,8 @@ Since modding is just a hobby for me I expect no donations to keep modding. If y
 [*] Do not report errors by making a discussion-thread, I get no notification of that.
 [*] If you have the solution for a problem, please post it to the GitHub repository.
 [*] Use [url=https://github.com/RimSort/RimSort/releases/latest]RimSort[/url] to sort your mods
-[/list]</description>
-  <modVersion IgnoreIfNoMatchingField="True">1.6.0</modVersion>
+[/list] 
+
+[url=https://steamcommunity.com/sharedfiles/filedetails/changelog/3570531169][img]https://img.shields.io/github/v/release/emipa606/VisualXMLPatches?label=latest%20version&amp;style=plastic&amp;labelColor=0070cd&amp;color=white[/img][/url] | tags:  mod troubleshooting,  error identification</description>
+  <modVersion IgnoreIfNoMatchingField="True">1.6.1</modVersion>
 </ModMetaData>
