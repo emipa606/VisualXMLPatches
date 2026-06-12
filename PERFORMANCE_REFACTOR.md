@@ -18,13 +18,13 @@ Search now uses a cached `SearchText` string per patch record and `IndexOf(..., 
 
 Search is also debounced by 250 ms. The text box updates immediately, but filtering waits briefly until the user pauses typing. Clearing the search applies immediately because returning to the full list should feel instant.
 
-Patch values are deliberately excluded from default search. Extracting values can require XML parsing and pretty-printing. A future explicit "include values in search" option could build a separate value index, but ordinary search should stay cheap.
+Patch values are excluded from default search unless the user enables **Include XML values**. The option is persisted through RimWorld `ModSettings` and defaults to off. When enabled, search first checks the cheap cached fields and only falls back to a separate lazy raw-value cache if needed. The raw search cache intentionally avoids XML pretty-printing; formatted XML is still only for display.
 
 ## XML value formatting changes
 
-Patch values are now formatted lazily. The refactor only checks whether a patch has a value field while building `PatchRecord`; it does not stringify or pretty-print the value. The actual formatted text is computed only when the user expands a row, then cached on that record.
+Patch values are now formatted lazily. The refactor only checks whether a patch has a value field while building `PatchRecord`; it does not stringify or pretty-print the value. The actual formatted text is computed only when the user expands a row while **Include XML values** is enabled, then cached on that record. If XML values are disabled, expanded rows show a cheap explanatory note instead of formatting the value.
 
-This is the most important removal from the old implementation: the previous code could format XML values while searching or calculating layout even when rows were collapsed and the user never inspected those values.
+This is the most important removal from the old implementation: the previous code could format XML values while searching or calculating layout even when rows were collapsed and the user never inspected those values. The optional value-search path uses raw value text, not formatted display XML, so users can opt into deeper search without paying the pretty-printing cost for every matching attempt.
 
 ## Removed or avoided work
 
@@ -33,6 +33,8 @@ The old draw method used LINQ grouping/sorting/counting on every draw call. That
 The old height calculation measured `mods` and verbose `operations` detail text, but the row expansion UI only displayed `attribute` and `value`. That unused detail-height work was removed rather than cached. The compact operations summary is still retained because it is useful for search and for display when a patch has no xpath.
 
 The scroll view now skips drawing rows outside the visible viewport. It still advances the logical Y position for every row so the scrollbar remains correct, but off-screen rows do not create labels, buttons, highlights, or tooltips.
+
+The **Collapse All** button clears every expanded patch row and collapses the currently visible mod groups. It does not clear cached formatted values; reopening an already inspected row should be cheap.
 
 ## Harmony capture changes
 

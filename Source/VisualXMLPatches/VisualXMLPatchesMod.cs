@@ -22,12 +22,16 @@ internal class VisualXMLPatchesMod : Mod
     // build patch metadata once, rebuild search/groups only when dirty, and defer
     // expensive XML formatting until a row is actually expanded.
     private const float IconSize = 32f;
-    private const float TopAreaHeight = 82f;
+    private const float TopAreaHeight = 112f;
     private const float HeaderHeight = 40f;
     private const float RowHeight = 32f;
     private const float OpenWidth = 60f;
+    private const float CollapseButtonWidth = 110f;
+    private const float ValueToggleWidth = 280f;
     private const float SearchDebounceSeconds = 0.25f;
+    private const int MinXmlValueSearchLength = 2;
     private static string currentVersion;
+    private static VisualXMLPatchesSettings settings;
     private static Vector2 patchesScrollPosition;
     private static string searchFilter = string.Empty;
 
@@ -61,6 +65,7 @@ internal class VisualXMLPatchesMod : Mod
     private static string pendingSearchQuery = string.Empty;
     private static string appliedSearchQuery = string.Empty;
     private static float lastSearchEditTime = -1f;
+    private static bool includeXmlValues;
 
     // XmlWriterSettings allocation used to happen as part of value formatting.
     // Keep one settings instance because formatting may still run for expanded rows.
@@ -78,6 +83,8 @@ internal class VisualXMLPatchesMod : Mod
     {
         new Harmony("Mlie.VisualXMLPatches").PatchAll(Assembly.GetExecutingAssembly());
         currentVersion = VersionFromManifest.GetVersionFromModMetaData(content.ModMetaData);
+        settings = GetSettings<VisualXMLPatchesSettings>();
+        includeXmlValues = settings.IncludeXmlValues;
     }
 
     public override string SettingsCategory()
@@ -94,10 +101,12 @@ internal class VisualXMLPatchesMod : Mod
         var topRect = new Rect(rect.x, rect.y, rect.width, TopAreaHeight);
         var lowerRect = new Rect(rect.x, rect.y + TopAreaHeight + 6f, rect.width, rect.height - TopAreaHeight - 6f);
 
-        var listingTop = new Listing_Standard { ColumnWidth = topRect.width };
-        listingTop.Begin(topRect);
-        listingTop.Label("VXP.Search".Translate());
-        searchFilter = listingTop.TextEntry(searchFilter ?? string.Empty);
+        var searchLabelRect = new Rect(topRect.x, topRect.y, topRect.width, 24f);
+        Widgets.Label(searchLabelRect,
+            includeXmlValues ? "VXP.SearchWithXmlValues".Translate() : "VXP.SearchWithoutXmlValues".Translate());
+
+        var searchRect = new Rect(topRect.x, topRect.y + 28f, topRect.width, 30f);
+        searchFilter = Widgets.TextField(searchRect, searchFilter ?? string.Empty);
         var query = (searchFilter ?? string.Empty).Trim();
         var activeQuery = GetDebouncedSearchQuery(query);
 
@@ -106,8 +115,7 @@ internal class VisualXMLPatchesMod : Mod
         EnsureFilteredRecords(activeQuery);
         EnsureGroups();
 
-        listingTop.Label("VXP.FoundPatches".Translate($"{filteredRecords.Count}/{patchRecords.Count}"));
-        listingTop.End();
+        DrawTopControls(topRect);
 
         var outRect = lowerRect;
         var viewWidth = outRect.width - 16f;
@@ -165,6 +173,63 @@ internal class VisualXMLPatchesMod : Mod
 
         Widgets.EndScrollView();
         DrawVersion(rect);
+    }
+
+    private void DrawTopControls(Rect topRect)
+    {
+        var countRect = new Rect(topRect.x, topRect.y + 64f, 520f, 30f);
+        Widgets.Label(countRect, "VXP.FoundPatches".Translate($"{filteredRecords.Count}/{patchRecords.Count}"));
+
+        var collapseRect = new Rect(topRect.xMax - CollapseButtonWidth, topRect.y + 62f, CollapseButtonWidth, 32f);
+        if (Widgets.ButtonText(collapseRect, "VXP.CollapseAll".Translate()))
+        {
+            CollapseAllVisible();
+        }
+
+        TooltipHandler.TipRegion(collapseRect, "VXP.CollapseAllTooltip".Translate());
+
+        var toggleRect = new Rect(collapseRect.x - ValueToggleWidth - 12f, topRect.y + 58f, ValueToggleWidth, 36f);
+        var previousIncludeXmlValues = includeXmlValues;
+        var listing = new Listing_Standard { ColumnWidth = toggleRect.width };
+        listing.Begin(toggleRect);
+        listing.CheckboxLabeled("VXP.IncludeXmlValues".Translate(), ref includeXmlValues,
+            "VXP.IncludeXmlValuesTooltip".Translate());
+        listing.End();
+
+        if (previousIncludeXmlValues != includeXmlValues)
+        {
+            OnIncludeXmlValuesChanged();
+        }
+    }
+
+    private void OnIncludeXmlValuesChanged()
+    {
+        settings ??= GetSettings<VisualXMLPatchesSettings>();
+        settings.IncludeXmlValues = includeXmlValues;
+        WriteSettings();
+
+        // The query text did not necessarily change, but the searchable fields did.
+        // Apply any pending text immediately so explicit toggle clicks are not held
+        // behind the typing debounce.
+        pendingSearchQuery = (searchFilter ?? string.Empty).Trim();
+        ApplyPendingSearchQuery();
+        lastAppliedSearchQuery = null;
+        filterDirty = true;
+        groupsDirty = true;
+    }
+
+    private static void CollapseAllVisible()
+    {
+        expandedPatches.Clear();
+
+        // Collapse only groups in the current filtered view, but clear expanded rows
+        // globally so hidden expanded details do not reappear when the search changes.
+        for (var i = 0; i < groupedRecords.Count; i++)
+        {
+            var group = groupedRecords[i];
+            group.Collapsed = true;
+            collapsedPerMod[group.Key] = true;
+        }
     }
 
     private static string GetDebouncedSearchQuery(string query)
@@ -416,7 +481,7 @@ internal class VisualXMLPatchesMod : Mod
             for (var i = 0; i < patchRecords.Count; i++)
             {
                 var record = patchRecords[i];
-                if (ContainsIgnoreCase(record.SearchText, query))
+                if (MatchesSearch(record, query))
                 {
                     filteredRecords.Add(record);
                 }
@@ -426,6 +491,20 @@ internal class VisualXMLPatchesMod : Mod
         lastAppliedSearchQuery = query;
         filterDirty = false;
         groupsDirty = true;
+    }
+
+    private static bool MatchesSearch(PatchRecord record, string query)
+    {
+        if (ContainsIgnoreCase(record.SearchText, query))
+        {
+            return true;
+        }
+
+        // XML value search is opt-in because extracting values can touch XML nodes
+        // and create strings for many rows. Keep the cheap cached haystack first,
+        // then fall back to lazy value text only when the user asked for it.
+        return includeXmlValues && query.Length >= MinXmlValueSearchLength && record.HasValueField &&
+               ContainsIgnoreCase(GetValueSearchText(record), query);
     }
 
     private static void EnsureGroups()
@@ -532,10 +611,17 @@ internal class VisualXMLPatchesMod : Mod
 
         if (record.HasValueField)
         {
-            var value = GetFormattedValue(record);
-            if (!string.IsNullOrEmpty(value))
+            if (includeXmlValues)
             {
-                height += calcValueHeight(value.Trim(), detailsWidth) + 8f;
+                var value = GetFormattedValue(record);
+                if (!string.IsNullOrEmpty(value))
+                {
+                    height += calcValueHeight(value.Trim(), detailsWidth) + 8f;
+                }
+            }
+            else
+            {
+                height += calcValueHeight("VXP.XmlValueHidden".Translate(), detailsWidth) + 8f;
             }
         }
 
@@ -673,6 +759,13 @@ internal class VisualXMLPatchesMod : Mod
             return;
         }
 
+        if (!includeXmlValues)
+        {
+            DrawDetailBlockIfVisible(ref curY, detailsWidth, "VXP.XmlValueHidden".Translate(),
+                new Color(0.2f, 0.2f, 0.2f, 0.18f), visibleTop, visibleBottom, 8f);
+            return;
+        }
+
         var value = GetFormattedValue(record);
         if (!string.IsNullOrEmpty(value))
         {
@@ -718,6 +811,20 @@ internal class VisualXMLPatchesMod : Mod
         record.FormattedValue = record.Patch == null ? string.Empty : getPatchValue(record.Patch);
         record.ValueComputed = true;
         return record.FormattedValue;
+    }
+
+    private static string GetValueSearchText(PatchRecord record)
+    {
+        // Separate cache for search text. Search should not pretty-print XML because
+        // indentation is only a display concern and adds avoidable work.
+        if (record.ValueSearchTextComputed)
+        {
+            return record.ValueSearchText;
+        }
+
+        record.ValueSearchText = record.Patch == null ? string.Empty : getPatchValueSearchText(record.Patch);
+        record.ValueSearchTextComputed = true;
+        return record.ValueSearchText;
     }
 
     private static Dictionary<ModContentPack, int> GetLoadOrderMap()
@@ -952,6 +1059,69 @@ internal class VisualXMLPatchesMod : Mod
         }
 
         return string.Empty;
+    }
+
+    private static string getPatchValueSearchText(PatchOperation patch)
+    {
+        // Raw value extraction for optional search. Keep this cheaper than
+        // getPatchValue: no XmlDocument parsing, no indentation, no display wrapping.
+        try
+        {
+            var fi = getFieldCached(patch.GetType(), "value");
+            if (fi == null)
+            {
+                return string.Empty;
+            }
+
+            var raw = fi.GetValue(patch);
+            switch (raw)
+            {
+                case null:
+                    return string.Empty;
+                case string s:
+                    return s;
+            }
+
+            var rawType = raw.GetType();
+            if (rawType.Name == "XmlContainer")
+            {
+                var nodeField = getFieldCached(rawType, "node") ?? getFieldCached(rawType, "Node");
+                return nodeField?.GetValue(raw) is XmlNode xn ? xn.OuterXml : string.Empty;
+            }
+
+            switch (raw)
+            {
+                case XmlNode xmlNode:
+                    return xmlNode.OuterXml;
+                case IEnumerable<XmlNode> nodeEnum:
+                {
+                    var sb = new StringBuilder();
+                    foreach (var node in nodeEnum)
+                    {
+                        if (node == null)
+                        {
+                            continue;
+                        }
+
+                        if (sb.Length > 0)
+                        {
+                            sb.Append('\n');
+                        }
+
+                        sb.Append(node.OuterXml);
+                    }
+
+                    return sb.ToString();
+                }
+            }
+
+            var generic = raw.ToString();
+            return !string.IsNullOrEmpty(generic) && generic != rawType.FullName ? generic : string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private static string getPatchAttribute(PatchOperation patch)

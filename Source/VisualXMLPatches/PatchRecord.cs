@@ -30,15 +30,17 @@ internal sealed class PatchRecord
     public string OperationsSummary = string.Empty;
     public string DisplayXPath = string.Empty;
 
-    // Cached search haystack for cheap fields. Patch values are not included here on
-    // purpose: extracting/pretty-printing values can parse XML and should not happen
-    // during ordinary typing unless a future explicit "search values" mode is added.
+    // Cached search haystack for cheap fields. Patch values are deliberately separate
+    // so XML value search can stay opt-in without changing ordinary search cost.
     public string SearchText = string.Empty;
 
     public bool HasValueField;
 
-    // Value formatting is lazy. These fields are filled the first time the row is
-    // expanded, then reused on every repaint/layout pass afterwards.
+    // Value search and value display use separate caches. Search keeps raw XML/text
+    // because pretty-printing is a display concern and adds avoidable work. Display
+    // formatting remains lazy and only runs when expanded values are actually shown.
+    public bool ValueSearchTextComputed;
+    public string ValueSearchText = string.Empty;
     public bool ValueComputed;
     public string FormattedValue = string.Empty;
 
