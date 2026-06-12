@@ -57,6 +57,7 @@ internal class VisualXMLPatchesMod : Mod
     private static bool filterDirty = true;
     private static bool groupsDirty = true;
     private static string lastAppliedSearchQuery;
+    private static bool refreshedPatchDiscoveryForUi;
     private static string pendingSearchQuery = string.Empty;
     private static string appliedSearchQuery = string.Empty;
     private static float lastSearchEditTime = -1f;
@@ -211,6 +212,7 @@ internal class VisualXMLPatchesMod : Mod
         // This replaces the old per-frame row construction. Patch metadata changes
         // only when patches/results are captured, so the index can stay stable across
         // layout/repaint/input events.
+        EnsureCompletePatchCapture();
         EnsureResultsAligned();
 
         var patchCount = VisualXMLPatches.Patches?.Count ?? 0;
@@ -221,6 +223,28 @@ internal class VisualXMLPatchesMod : Mod
         }
 
         RebuildPatchIndex();
+    }
+
+
+    private static void EnsureCompletePatchCapture()
+    {
+        if (!refreshedPatchDiscoveryForUi)
+        {
+            // Refresh ownership/discovery after startup. In normal load orders the
+            // Harmony prefix has already captured every Apply call, but if the mod
+            // is constructed late it may only see a small tail of patches. The
+            // discovery fallback keeps the settings window complete instead of
+            // showing only those late captures.
+            VisualXMLPatches.RebuildPatchDiscovery();
+            refreshedPatchDiscoveryForUi = true;
+        }
+
+        if (VisualXMLPatches.EnsureCapturedPatchListComplete())
+        {
+            indexDirty = true;
+            filterDirty = true;
+            groupsDirty = true;
+        }
     }
 
     private static void EnsureResultsAligned()
