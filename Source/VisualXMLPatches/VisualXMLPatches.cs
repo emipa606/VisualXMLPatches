@@ -34,6 +34,29 @@ public class VisualXMLPatches
         }
     }
 
+    internal static int RecordPatchStart(PatchOperation patch)
+    {
+        Patches ??= [];
+        Results ??= [];
+
+        var index = Patches.Count;
+        Patches.Add(patch);
+        PatchToMod.TryGetValue(patch, out var mod);
+        Mods.Add(mod);
+        Results.Add(true);
+        return index;
+    }
+
+    internal static void RecordPatchResult(int index, bool success)
+    {
+        if (Results == null || index < 0 || index >= Results.Count)
+        {
+            return;
+        }
+
+        Results[index] = success;
+    }
+
     private static void mapPatchTree(ModContentPack mod, PatchOperation patch, HashSet<PatchOperation> visited)
     {
         if (patch == null || !visited.Add(patch))

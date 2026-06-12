@@ -17,18 +17,61 @@ namespace VisualXMLPatches;
 [StaticConstructorOnStartup]
 internal class VisualXMLPatchesMod : Mod
 {
+    // IMGUI methods are called repeatedly for layout, repaint and input events.
+    // Keep DoSettingsWindowContents as close to a pure draw method as possible:
+    // build patch metadata once, rebuild search/groups only when dirty, and defer
+    // expensive XML formatting until a row is actually expanded.
     private const float IconSize = 32f;
     private const float TopAreaHeight = 82f;
     private const float HeaderHeight = 40f;
     private const float RowHeight = 32f;
     private const float OpenWidth = 60f;
+    private const float SearchDebounceSeconds = 0.25f;
     private static string currentVersion;
     private static Vector2 patchesScrollPosition;
     private static string searchFilter = string.Empty;
-    private static readonly Dictionary<ModContentPack, bool> collapsedPerMod = new();
+
+    // UI state. Sets/dictionaries are used only for membership/state lookups;
+    // ordered patch display is still driven by List<PatchRecord> so applied patch
+    // order remains stable and visible.
+    private static readonly Dictionary<string, bool> collapsedPerMod = new();
     private static readonly HashSet<int> expandedPatches = [];
     private static readonly Dictionary<(Type type, string field), FieldInfo> fieldCache = new();
     private static readonly Dictionary<object, string> xmlFormatCache = new();
+
+    // Cached view models. The old implementation assembled anonymous rows, grouped
+    // them with LINQ, and reflected patch fields inside the draw loop. These lists
+    // move that work to explicit rebuild points instead of every IMGUI event.
+    private static readonly List<PatchRecord> patchRecords = [];
+    private static readonly List<PatchRecord> filteredRecords = [];
+    private static readonly List<PatchGroupView> groupedRecords = [];
+    private static readonly Dictionary<string, PatchGroupView> groupBuildMap = new();
+
+    // Dirty flags describe which derived views must be rebuilt. Search and grouping
+    // are intentionally separate so typing does not force patch metadata extraction.
+    private static Dictionary<ModContentPack, int> loadOrderMap;
+    private static int loadOrderCount = -1;
+    private static int indexedPatchCount = -1;
+    private static int indexedResultCount = -1;
+    private static bool indexDirty = true;
+    private static bool filterDirty = true;
+    private static bool groupsDirty = true;
+    private static string lastAppliedSearchQuery;
+    private static string pendingSearchQuery = string.Empty;
+    private static string appliedSearchQuery = string.Empty;
+    private static float lastSearchEditTime = -1f;
+
+    // XmlWriterSettings allocation used to happen as part of value formatting.
+    // Keep one settings instance because formatting may still run for expanded rows.
+    private static readonly XmlWriterSettings PrettyXmlSettings = new()
+    {
+        Indent = true,
+        IndentChars = "  ",
+        NewLineChars = "\n",
+        NewLineHandling = NewLineHandling.Replace,
+        OmitXmlDeclaration = true,
+        ConformanceLevel = ConformanceLevel.Fragment
+    };
 
     public VisualXMLPatchesMod(ModContentPack content) : base(content)
     {
@@ -43,16 +86,9 @@ internal class VisualXMLPatchesMod : Mod
 
     public override void DoSettingsWindowContents(Rect rect)
     {
-        VisualXMLPatches.Results ??= new List<bool>(VisualXMLPatches.Patches.Count);
-
-        if (VisualXMLPatches.Results.Count != VisualXMLPatches.Patches.Count)
-        {
-            VisualXMLPatches.Results.Clear();
-            foreach (var patchOperation in VisualXMLPatches.Patches)
-            {
-                VisualXMLPatches.Results.Add(!getNeverSucceeded(patchOperation));
-            }
-        }
+        // All expensive data preparation below is guarded. With large mod lists this
+        // prevents an idle settings window from repeatedly redoing search/group work.
+        EnsurePatchIndex();
 
         var topRect = new Rect(rect.x, rect.y, rect.width, TopAreaHeight);
         var lowerRect = new Rect(rect.x, rect.y + TopAreaHeight + 6f, rect.width, rect.height - TopAreaHeight - 6f);
@@ -60,300 +96,629 @@ internal class VisualXMLPatchesMod : Mod
         var listingTop = new Listing_Standard { ColumnWidth = topRect.width };
         listingTop.Begin(topRect);
         listingTop.Label("VXP.Search".Translate());
-        searchFilter = listingTop.TextEntry(searchFilter ?? string.Empty).Trim();
-        listingTop.Label("VXP.FoundPatches".Translate(VisualXMLPatches.Patches.Count));
+        searchFilter = listingTop.TextEntry(searchFilter ?? string.Empty);
+        var query = (searchFilter ?? string.Empty).Trim();
+        var activeQuery = GetDebouncedSearchQuery(query);
+
+        // Filtering uses the debounced/applied query, not the currently typed text.
+        // The textbox remains responsive while search waits for the typing pause.
+        EnsureFilteredRecords(activeQuery);
+        EnsureGroups();
+
+        listingTop.Label("VXP.FoundPatches".Translate($"{filteredRecords.Count}/{patchRecords.Count}"));
         listingTop.End();
 
-        var count = Math.Min(VisualXMLPatches.Patches.Count,
-            VisualXMLPatches.Results.Count); // do NOT limit by Mods list
-        IEnumerable<(int index, ModContentPack mod, PatchOperation patch, bool success)> data = Enumerable
-            .Range(0, count)
-            .Select(i => (i, resolveModForIndex(i), VisualXMLPatches.Patches[i], VisualXMLPatches.Results[i]));
-
-        if (!string.IsNullOrEmpty(searchFilter))
-        {
-            var filterLower = searchFilter.ToLowerInvariant();
-            data = data.Where(d => (d.mod?.Name ?? string.Empty).ToLowerInvariant().Contains(filterLower)
-                                   || d.patch.GetType().Name.ToLowerInvariant().Contains(filterLower)
-                                   || getPatchXPath(d.patch).ToLowerInvariant().Contains(filterLower)
-                                   || getPatchSourceFile(d.patch).ToLowerInvariant().Contains(filterLower)
-                                   || getPatchAttribute(d.patch).ToLowerInvariant().Contains(filterLower)
-                                   || getPatchValue(d.patch).ToLowerInvariant().Contains(filterLower)
-                                   || getPatchMods(d.patch).ToLowerInvariant().Contains(filterLower)
-                                   || getPatchOperationsSummary(d.patch).ToLowerInvariant().Contains(filterLower));
-        }
-
-        var loadOrderMap = LoadedModManager.RunningModsListForReading.Select((m, i) => (m, i))
-            .ToDictionary(t => t.m, t => t.i);
-
-        // FIX: handle null mod keys explicitly to avoid ArgumentNullException when ordering
-        var grouped = data.GroupBy(d => d.mod)
-            .OrderBy(g =>
-            {
-                if (g.Key == null)
-                {
-                    return int.MaxValue; // unknown mods sorted last
-                }
-
-                return loadOrderMap.GetValueOrDefault(g.Key, int.MaxValue);
-            })
-            .ThenBy(g => g.Key?.Name)
-            .ToArray();
-
-        var totalHeightCalc = 0f;
-        foreach (var group in grouped)
-        {
-            var groupHasFailure = group.Any(p => !p.success);
-            var collapsed = getOrAssignDefaultCollapsed(group.Key, groupHasFailure);
-            totalHeightCalc += HeaderHeight;
-            if (collapsed)
-            {
-                continue;
-            }
-
-            foreach (var entry in group)
-            {
-                totalHeightCalc += RowHeight;
-                if (!expandedPatches.Contains(entry.index))
-                {
-                    continue;
-                }
-
-                var detailsWidth = lowerRect.width - 70f;
-                var attribute = getPatchAttribute(entry.patch);
-                var value = getPatchValue(entry.patch);
-                var mods = getPatchMods(entry.patch);
-                var operations = getPatchOperationsDetail(entry.patch);
-                if (!string.IsNullOrEmpty(attribute))
-                {
-                    totalHeightCalc += calcValueHeight($"attribute: {attribute}", detailsWidth) + 4f;
-                }
-
-                if (!string.IsNullOrEmpty(mods))
-                {
-                    totalHeightCalc += calcValueHeight(mods, detailsWidth) + 4f;
-                }
-
-                if (!string.IsNullOrEmpty(operations))
-                {
-                    totalHeightCalc += calcValueHeight(operations, detailsWidth) + 4f;
-                }
-
-                if (!string.IsNullOrEmpty(value))
-                {
-                    totalHeightCalc += calcValueHeight(value, detailsWidth) + 8f;
-                }
-            }
-        }
-
         var outRect = lowerRect;
-        var viewRect = new Rect(0f, 0f, outRect.width - 16f, Math.Max(totalHeightCalc + 10f, outRect.height - 1f));
+        var viewWidth = outRect.width - 16f;
+        var detailsWidth = viewWidth - 70f;
+        var totalHeightCalc = CalculateTotalHeight(detailsWidth);
+        var viewRect = new Rect(0f, 0f, viewWidth, Math.Max(totalHeightCalc + 10f, outRect.height - 1f));
+        // The scroll view may contain tens of thousands of rows. We still advance
+        // curY for layout correctness, but only draw controls that intersect the
+        // visible viewport.
+        var visibleTop = patchesScrollPosition.y;
+        var visibleBottom = patchesScrollPosition.y + outRect.height;
+
         Widgets.BeginScrollView(outRect, ref patchesScrollPosition, viewRect);
         var curY = 0f;
 
-        foreach (var group in grouped)
+        foreach (var group in groupedRecords)
         {
-            var groupHasFailure = group.Any(p => !p.success);
-            var collapsed = getOrAssignDefaultCollapsed(group.Key, groupHasFailure);
             var headerRect = new Rect(0f, curY, viewRect.width, HeaderHeight);
-            if (Mouse.IsOver(headerRect))
+            if (IsVisible(curY, HeaderHeight, visibleTop, visibleBottom))
             {
-                Widgets.DrawHighlight(headerRect);
+                DrawGroupHeader(group, headerRect);
             }
 
-            if (groupHasFailure)
-            {
-                Widgets.DrawBoxSolid(headerRect, new Color(0.4f, 0f, 0f, 0.18f));
-            }
-
-            var iconRect = new Rect(headerRect.x + 4f, headerRect.y + ((HeaderHeight - IconSize) / 2f), IconSize,
-                IconSize);
-            var previewTex = group.Key?.ModMetaData?.PreviewImage;
-            if (previewTex != null)
-            {
-                GUI.DrawTexture(iconRect, previewTex, ScaleMode.ScaleToFit);
-            }
-            else
-            {
-                Widgets.DrawBoxSolid(iconRect, new Color(0f, 0f, 0f, 0.3f));
-                Text.Anchor = TextAnchor.MiddleCenter;
-                Text.Font = GameFont.Tiny;
-                Widgets.Label(iconRect, group.Key == null ? "(unknown)" : "no img");
-                Text.Font = GameFont.Small;
-                Text.Anchor = TextAnchor.UpperLeft;
-            }
-
-            Text.Anchor = TextAnchor.MiddleLeft;
-            var modName = group.Key?.Name ?? "<Unknown Mod>";
-            var failCount = group.Count(p => !p.success);
-            var failSuffix = failCount > 0 ? $"  !{failCount}" : string.Empty;
-            var labelRect = new Rect(iconRect.xMax + 6f, headerRect.y, headerRect.width - (iconRect.xMax + 6f),
-                HeaderHeight);
-            var toggleLabel = $"{(collapsed ? "+" : "-")} {modName} ({group.Count()}){failSuffix}";
-            if (group.Key != null && Widgets.ButtonInvisible(headerRect))
-            {
-                collapsedPerMod[group.Key] = !collapsed;
-                collapsed = !collapsed;
-            }
-
-            if (groupHasFailure)
-            {
-                GUI.color = ColorLibrary.RedReadable;
-            }
-
-            Widgets.Label(labelRect, toggleLabel);
-            if (groupHasFailure)
-            {
-                GUI.color = Color.white;
-            }
-
-            if (group.Key != null)
-            {
-                TooltipHandler.TipRegion(headerRect,
-                    group.Key.PackageIdPlayerFacing +
-                    (groupHasFailure ? $"\nFailed patches: {failCount}" : string.Empty));
-            }
-
-            Text.Anchor = TextAnchor.UpperLeft;
             curY += HeaderHeight;
-            if (collapsed)
+            if (group.Collapsed)
             {
                 continue;
             }
 
-            foreach (var entry in group)
+            for (var i = 0; i < group.Records.Count; i++)
             {
-                var displayIndex = entry.index + 1;
-                var expanded = expandedPatches.Contains(entry.index);
-                var patchType = entry.patch.GetType().Name;
-                if (patchType.StartsWith("PatchOperation"))
-                {
-                    patchType = patchType["PatchOperation".Length..];
-                }
-
-                var xpath = getPatchXPath(entry.patch);
-                var sourceFile = getPatchSourceFile(entry.patch);
-                var attribute = getPatchAttribute(entry.patch);
-                var value = getPatchValue(entry.patch);
-                var modsText = getPatchMods(entry.patch);
-                var operationsText = getPatchOperationsSummary(entry.patch);
-                // If no xpath, substitute operations or mods summary for display clarity
-                var displayXpath = xpath == "(no xpath)"
-                    ? !string.IsNullOrEmpty(operationsText) ? operationsText :
-                    !string.IsNullOrEmpty(modsText) ? modsText : xpath
-                    : xpath;
-                var hasDetails = !string.IsNullOrEmpty(attribute) || !string.IsNullOrEmpty(value);
-                var success = entry.success;
-                var marker = hasDetails ? expanded ? "-" : "+" : " ";
-                var statusTag = success ? string.Empty : " [FAIL]";
-                var label = $"{marker} #{displayIndex}: {patchType}{statusTag} | {shorten(displayXpath, 80)}";
-
+                var record = group.Records[i];
+                var expanded = expandedPatches.Contains(record.Index);
                 var rowRect = new Rect(8f, curY, viewRect.width - 8f, RowHeight);
-                if (string.IsNullOrEmpty(sourceFile))
+                if (string.IsNullOrEmpty(record.SourceFile))
                 {
-                    rowRect.x += 10;
+                    rowRect.x += 10f;
                     rowRect.width -= 10f;
                 }
 
-                if (Mouse.IsOver(rowRect))
+                if (IsVisible(curY, RowHeight, visibleTop, visibleBottom))
                 {
-                    Widgets.DrawHighlight(rowRect);
+                    DrawPatchRow(record, rowRect, ref expanded);
                 }
-
-                if (!success)
-                {
-                    Widgets.DrawBoxSolid(rowRect, new Color(0.4f, 0f, 0f, 0.15f));
-                }
-
-                var openRect = new Rect(rowRect.xMax - OpenWidth, rowRect.y + 4f, OpenWidth - 4f, RowHeight - 8f);
-                if (!string.IsNullOrEmpty(sourceFile))
-                {
-                    if (Widgets.ButtonText(openRect, "VXP.Open".Translate()))
-                    {
-                        openSourceFile(sourceFile, entry.mod);
-                    }
-
-                    TooltipHandler.TipRegion(openRect, sourceFile);
-                }
-
-                var labelRectRow = new Rect(rowRect.x + 4f, rowRect.y, rowRect.width - OpenWidth - 4f, RowHeight);
-                Text.Anchor = TextAnchor.MiddleLeft;
-                if (hasDetails && Widgets.ButtonInvisible(labelRectRow))
-                {
-                    if (!expandedPatches.Add(entry.index))
-                    {
-                        expandedPatches.Remove(entry.index);
-                        expanded = false;
-                    }
-                }
-
-                if (!success)
-                {
-                    GUI.color = ColorLibrary.RedReadable;
-                }
-
-                Widgets.Label(labelRectRow, label);
-                if (!success)
-                {
-                    GUI.color = Color.white;
-                }
-
-                TooltipHandler.TipRegion(labelRectRow, displayXpath);
-                Text.Anchor = TextAnchor.UpperLeft;
 
                 curY += RowHeight;
-                if (!expanded || !hasDetails)
+                if (!expanded || !record.HasDetails)
                 {
                     continue;
                 }
 
-                var detailsWidth = viewRect.width - 70f;
-                if (!string.IsNullOrEmpty(attribute))
-                {
-                    drawDetailBlock(ref curY, detailsWidth, $"attribute: {attribute}",
-                        new Color(0.15f, 0.15f, 0.15f, 0.25f));
-                }
-
-                if (!string.IsNullOrEmpty(value))
-                {
-                    drawDetailBlock(ref curY, detailsWidth, value.Trim(), new Color(0.2f, 0.2f, 0.2f, 0.25f), 8f);
-                }
+                DrawPatchDetails(record, ref curY, detailsWidth, visibleTop, visibleBottom);
             }
         }
 
         Widgets.EndScrollView();
+        DrawVersion(rect);
+    }
 
-        if (string.IsNullOrEmpty(currentVersion))
+    private static string GetDebouncedSearchQuery(string query)
+    {
+        // Debounce by design rather than necessity: even though cached search is fast,
+        // there is no value in rebuilding a 30k+ patch result set for every character
+        // while the user is still typing. Clearing search applies immediately because
+        // users expect the full list to return without delay.
+        query ??= string.Empty;
+        var now = Time.realtimeSinceStartup;
+
+        if (!string.Equals(query, pendingSearchQuery, StringComparison.Ordinal))
+        {
+            pendingSearchQuery = query;
+            lastSearchEditTime = now;
+
+            if (string.IsNullOrEmpty(query))
+            {
+                ApplyPendingSearchQuery();
+            }
+        }
+
+        if (!string.Equals(pendingSearchQuery, appliedSearchQuery, StringComparison.Ordinal) &&
+            now - lastSearchEditTime >= SearchDebounceSeconds)
+        {
+            ApplyPendingSearchQuery();
+        }
+
+        return appliedSearchQuery;
+    }
+
+    private static void ApplyPendingSearchQuery()
+    {
+        if (string.Equals(appliedSearchQuery, pendingSearchQuery, StringComparison.Ordinal))
         {
             return;
         }
 
-        var verRect = new Rect(rect.x, rect.yMax - 18f, rect.width, 18f);
-        Text.Font = GameFont.Tiny;
-        GUI.color = Color.gray;
-        Widgets.Label(verRect, "VXP.ModVersion".Translate(currentVersion));
-        GUI.color = Color.white;
-        Text.Font = GameFont.Small;
+        appliedSearchQuery = pendingSearchQuery;
+        filterDirty = true;
     }
 
-    private static void drawDetailBlock(ref float curY, float width, string text, Color bg,
-        float extraBottomPadding = 4f)
+    private static void EnsurePatchIndex()
+    {
+        // This replaces the old per-frame row construction. Patch metadata changes
+        // only when patches/results are captured, so the index can stay stable across
+        // layout/repaint/input events.
+        EnsureResultsAligned();
+
+        var patchCount = VisualXMLPatches.Patches?.Count ?? 0;
+        var resultCount = VisualXMLPatches.Results?.Count ?? 0;
+        if (!indexDirty && indexedPatchCount == patchCount && indexedResultCount == resultCount)
+        {
+            return;
+        }
+
+        RebuildPatchIndex();
+    }
+
+    private static void EnsureResultsAligned()
+    {
+        // Defensive fallback for older captured state or failed Harmony result capture.
+        // Normal flow records success in PatchOperation_Apply.Postfix, but this keeps
+        // the UI usable even if Results gets out of sync with Patches.
+        VisualXMLPatches.Patches ??= [];
+        VisualXMLPatches.Results ??= [];
+
+        if (VisualXMLPatches.Results.Count == VisualXMLPatches.Patches.Count)
+        {
+            return;
+        }
+
+        VisualXMLPatches.Results.Clear();
+        foreach (var patchOperation in VisualXMLPatches.Patches)
+        {
+            VisualXMLPatches.Results.Add(!getNeverSucceeded(patchOperation));
+        }
+    }
+
+    private static void RebuildPatchIndex()
+    {
+        // Extract cheap, frequently displayed/searchable fields once. Do not format
+        // the value field here: value may contain XML, and formatting it was one of
+        // the main sources of typing/idle lag in the original render-loop approach.
+        patchRecords.Clear();
+        var loadOrder = GetLoadOrderMap();
+        var count = Math.Min(VisualXMLPatches.Patches?.Count ?? 0, VisualXMLPatches.Results?.Count ?? 0);
+        if (patchRecords.Capacity < count)
+        {
+            patchRecords.Capacity = count;
+        }
+
+        for (var i = 0; i < count; i++)
+        {
+            var patch = VisualXMLPatches.Patches[i];
+            var success = VisualXMLPatches.Results[i];
+            var record = BuildPatchRecord(i, patch, success, loadOrder);
+            patchRecords.Add(record);
+        }
+
+        indexedPatchCount = VisualXMLPatches.Patches?.Count ?? 0;
+        indexedResultCount = VisualXMLPatches.Results?.Count ?? 0;
+        indexDirty = false;
+        filterDirty = true;
+        groupsDirty = true;
+    }
+
+    private static PatchRecord BuildPatchRecord(int index, PatchOperation patch, bool success,
+        Dictionary<ModContentPack, int> loadOrder)
+    {
+        // Build a stable snapshot of the patch for display/search. Reflection remains
+        // necessary because Verse patch operations keep useful fields private, but it
+        // should happen during indexing, not every time Unity asks the window to draw.
+        var mod = resolveModForIndex(index);
+        var patchTypeFull = patch?.GetType().Name ?? string.Empty;
+        var patchTypeDisplay = patchTypeFull.StartsWith("PatchOperation", StringComparison.Ordinal)
+            ? patchTypeFull["PatchOperation".Length..]
+            : patchTypeFull;
+        var xpath = patch == null ? string.Empty : getPatchXPath(patch);
+        var sourceFile = patch == null ? string.Empty : getPatchSourceFile(patch);
+        var attribute = patch == null ? string.Empty : getPatchAttribute(patch);
+        var modsSummary = patch == null ? string.Empty : getPatchMods(patch);
+        var operationsSummary = patch == null ? string.Empty : getPatchOperationsSummary(patch);
+        var displayXPath = xpath == "(no xpath)"
+            ? !string.IsNullOrEmpty(operationsSummary)
+                ? operationsSummary
+                : !string.IsNullOrEmpty(modsSummary)
+                    ? modsSummary
+                    : xpath
+            : xpath;
+
+        var record = new PatchRecord
+        {
+            Index = index,
+            Patch = patch,
+            Mod = mod,
+            ModName = mod?.Name ?? "<Unknown Mod>",
+            PackageId = mod?.PackageIdPlayerFacing ?? string.Empty,
+            LoadOrderIndex = GetLoadOrderIndex(loadOrder, mod),
+            Success = success,
+            Failed = !success,
+            PatchTypeFull = patchTypeFull,
+            PatchTypeDisplay = patchTypeDisplay,
+            XPath = xpath,
+            SourceFile = sourceFile,
+            Attribute = attribute,
+            ModsSummary = modsSummary,
+            OperationsSummary = operationsSummary,
+            DisplayXPath = displayXPath,
+            HasValueField = patch != null && hasPatchValueField(patch)
+        };
+
+        record.SearchText = BuildSearchText(record);
+        return record;
+    }
+
+
+    private static int GetLoadOrderIndex(Dictionary<ModContentPack, int> loadOrder, ModContentPack mod)
+    {
+        if (mod == null || loadOrder == null)
+        {
+            return int.MaxValue;
+        }
+
+        return loadOrder.TryGetValue(mod, out var index) ? index : int.MaxValue;
+    }
+
+    private static string BuildSearchText(PatchRecord record)
+    {
+        // One cached haystack per row avoids repeated ToLowerInvariant allocations
+        // and repeated field-by-field checks. Patch values are deliberately excluded
+        // from default search because they can require XML parsing/pretty-printing.
+        var sb = new StringBuilder();
+        AppendSearchPart(sb, record.ModName);
+        AppendSearchPart(sb, record.PackageId);
+        AppendSearchPart(sb, record.PatchTypeFull);
+        AppendSearchPart(sb, record.PatchTypeDisplay);
+        AppendSearchPart(sb, record.XPath);
+        AppendSearchPart(sb, record.SourceFile);
+        AppendSearchPart(sb, record.Attribute);
+        AppendSearchPart(sb, record.ModsSummary);
+        AppendSearchPart(sb, record.OperationsSummary);
+        AppendSearchPart(sb, record.Success ? "success succeeded applied" : "fail failed error");
+        return sb.ToString();
+    }
+
+    private static void AppendSearchPart(StringBuilder sb, string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+
+        if (sb.Length > 0)
+        {
+            sb.Append('\n');
+        }
+
+        sb.Append(value);
+    }
+
+    private static void EnsureFilteredRecords(string query)
+    {
+        // Rebuild only when the applied query changes. The original code effectively
+        // searched on every IMGUI event, so one typed character could trigger multiple
+        // full scans before the next character was entered.
+        EnsurePatchIndex();
+
+        if (!filterDirty && string.Equals(query, lastAppliedSearchQuery, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        filteredRecords.Clear();
+        if (filteredRecords.Capacity < patchRecords.Count)
+        {
+            filteredRecords.Capacity = patchRecords.Count;
+        }
+
+        if (string.IsNullOrEmpty(query))
+        {
+            filteredRecords.AddRange(patchRecords);
+        }
+        else
+        {
+            for (var i = 0; i < patchRecords.Count; i++)
+            {
+                var record = patchRecords[i];
+                if (ContainsIgnoreCase(record.SearchText, query))
+                {
+                    filteredRecords.Add(record);
+                }
+            }
+        }
+
+        lastAppliedSearchQuery = query;
+        filterDirty = false;
+        groupsDirty = true;
+    }
+
+    private static void EnsureGroups()
+    {
+        if (!groupsDirty)
+        {
+            return;
+        }
+
+        RebuildGroups();
+        groupsDirty = false;
+    }
+
+    private static void RebuildGroups()
+    {
+        // Grouping replaces the old GroupBy/OrderBy/Any/Count pipeline in the draw
+        // method. Counts and failure flags are precomputed here so rendering headers
+        // is simple and allocation-free.
+        groupedRecords.Clear();
+        groupBuildMap.Clear();
+
+        for (var i = 0; i < filteredRecords.Count; i++)
+        {
+            var record = filteredRecords[i];
+            var key = GetModKey(record.Mod);
+            if (!groupBuildMap.TryGetValue(key, out var group))
+            {
+                group = new PatchGroupView
+                {
+                    Mod = record.Mod,
+                    Key = key,
+                    ModName = record.ModName,
+                    PackageId = record.PackageId,
+                    LoadOrderIndex = record.LoadOrderIndex
+                };
+                groupBuildMap[key] = group;
+                groupedRecords.Add(group);
+            }
+
+            group.Records.Add(record);
+            group.Count++;
+            if (record.Failed)
+            {
+                group.FailedCount++;
+                group.HasFailure = true;
+            }
+        }
+
+        groupedRecords.Sort(CompareGroups);
+        for (var i = 0; i < groupedRecords.Count; i++)
+        {
+            groupedRecords[i].Collapsed = getOrAssignDefaultCollapsed(groupedRecords[i].Key, groupedRecords[i].HasFailure);
+        }
+    }
+
+    private static int CompareGroups(PatchGroupView a, PatchGroupView b)
+    {
+        var loadCompare = a.LoadOrderIndex.CompareTo(b.LoadOrderIndex);
+        if (loadCompare != 0)
+        {
+            return loadCompare;
+        }
+
+        return string.Compare(a.ModName, b.ModName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static float CalculateTotalHeight(float detailsWidth)
+    {
+        // Height calculation still has to walk the logical rows so the scrollbar is
+        // correct, but it no longer recomputes unused details. The old code measured
+        // mods/operations detail text that was not actually drawn, so that work was
+        // removed rather than cached.
+        var totalHeight = 0f;
+        for (var g = 0; g < groupedRecords.Count; g++)
+        {
+            var group = groupedRecords[g];
+            totalHeight += HeaderHeight;
+            if (group.Collapsed)
+            {
+                continue;
+            }
+
+            for (var r = 0; r < group.Records.Count; r++)
+            {
+                var record = group.Records[r];
+                totalHeight += RowHeight;
+                if (expandedPatches.Contains(record.Index) && record.HasDetails)
+                {
+                    totalHeight += CalculateDetailHeight(record, detailsWidth);
+                }
+            }
+        }
+
+        return totalHeight;
+    }
+
+    private static float CalculateDetailHeight(PatchRecord record, float detailsWidth)
+    {
+        var height = 0f;
+        if (!string.IsNullOrEmpty(record.Attribute))
+        {
+            height += calcValueHeight($"attribute: {record.Attribute}", detailsWidth) + 4f;
+        }
+
+        if (record.HasValueField)
+        {
+            var value = GetFormattedValue(record);
+            if (!string.IsNullOrEmpty(value))
+            {
+                height += calcValueHeight(value.Trim(), detailsWidth) + 8f;
+            }
+        }
+
+        return height;
+    }
+
+    private static void DrawGroupHeader(PatchGroupView group, Rect headerRect)
+    {
+        if (Mouse.IsOver(headerRect))
+        {
+            Widgets.DrawHighlight(headerRect);
+        }
+
+        if (group.HasFailure)
+        {
+            Widgets.DrawBoxSolid(headerRect, new Color(0.4f, 0f, 0f, 0.18f));
+        }
+
+        var iconRect = new Rect(headerRect.x + 4f, headerRect.y + ((HeaderHeight - IconSize) / 2f), IconSize,
+            IconSize);
+        var previewTex = group.Mod?.ModMetaData?.PreviewImage;
+        if (previewTex != null)
+        {
+            GUI.DrawTexture(iconRect, previewTex, ScaleMode.ScaleToFit);
+        }
+        else
+        {
+            Widgets.DrawBoxSolid(iconRect, new Color(0f, 0f, 0f, 0.3f));
+            Text.Anchor = TextAnchor.MiddleCenter;
+            Text.Font = GameFont.Tiny;
+            Widgets.Label(iconRect, group.Mod == null ? "(unknown)" : "no img");
+            Text.Font = GameFont.Small;
+            Text.Anchor = TextAnchor.UpperLeft;
+        }
+
+        Text.Anchor = TextAnchor.MiddleLeft;
+        var failSuffix = group.FailedCount > 0 ? $"  !{group.FailedCount}" : string.Empty;
+        var labelRect = new Rect(iconRect.xMax + 6f, headerRect.y, headerRect.width - (iconRect.xMax + 6f),
+            HeaderHeight);
+        var toggleLabel = $"{(group.Collapsed ? "+" : "-")} {group.ModName} ({group.Count}){failSuffix}";
+        if (Widgets.ButtonInvisible(headerRect))
+        {
+            group.Collapsed = !group.Collapsed;
+            collapsedPerMod[group.Key] = group.Collapsed;
+        }
+
+        if (group.HasFailure)
+        {
+            GUI.color = ColorLibrary.RedReadable;
+        }
+
+        Widgets.Label(labelRect, toggleLabel);
+        if (group.HasFailure)
+        {
+            GUI.color = Color.white;
+        }
+
+        TooltipHandler.TipRegion(headerRect,
+            group.PackageId + (group.HasFailure ? $"\nFailed patches: {group.FailedCount}" : string.Empty));
+        Text.Anchor = TextAnchor.UpperLeft;
+    }
+
+    private static void DrawPatchRow(PatchRecord record, Rect rowRect, ref bool expanded)
+    {
+        var displayIndex = record.Index + 1;
+        var marker = record.HasDetails ? expanded ? "-" : "+" : " ";
+        var statusTag = record.Success ? string.Empty : " [FAIL]";
+        var label = $"{marker} #{displayIndex}: {record.PatchTypeDisplay}{statusTag} | {shorten(record.DisplayXPath, 80)}";
+
+        if (Mouse.IsOver(rowRect))
+        {
+            Widgets.DrawHighlight(rowRect);
+        }
+
+        if (record.Failed)
+        {
+            Widgets.DrawBoxSolid(rowRect, new Color(0.4f, 0f, 0f, 0.15f));
+        }
+
+        var openRect = new Rect(rowRect.xMax - OpenWidth, rowRect.y + 4f, OpenWidth - 4f, RowHeight - 8f);
+        if (!string.IsNullOrEmpty(record.SourceFile))
+        {
+            if (Widgets.ButtonText(openRect, "VXP.Open".Translate()))
+            {
+                openSourceFile(record.SourceFile, record.Mod);
+            }
+
+            TooltipHandler.TipRegion(openRect, record.SourceFile);
+        }
+
+        var labelRectRow = new Rect(rowRect.x + 4f, rowRect.y, rowRect.width - OpenWidth - 4f, RowHeight);
+        Text.Anchor = TextAnchor.MiddleLeft;
+        if (record.HasDetails && Widgets.ButtonInvisible(labelRectRow))
+        {
+            if (!expandedPatches.Add(record.Index))
+            {
+                expandedPatches.Remove(record.Index);
+                expanded = false;
+            }
+            else
+            {
+                expanded = true;
+            }
+        }
+
+        if (record.Failed)
+        {
+            GUI.color = ColorLibrary.RedReadable;
+        }
+
+        Widgets.Label(labelRectRow, label);
+        if (record.Failed)
+        {
+            GUI.color = Color.white;
+        }
+
+        TooltipHandler.TipRegion(labelRectRow, record.DisplayXPath);
+        Text.Anchor = TextAnchor.UpperLeft;
+    }
+
+    private static void DrawPatchDetails(PatchRecord record, ref float curY, float detailsWidth, float visibleTop,
+        float visibleBottom)
+    {
+        // Details are the only place where patch values are fetched/formatted. This
+        // keeps collapsed rows cheap and makes the user pay the XML formatting cost
+        // only for rows they intentionally inspect.
+        if (!string.IsNullOrEmpty(record.Attribute))
+        {
+            DrawDetailBlockIfVisible(ref curY, detailsWidth, $"attribute: {record.Attribute}",
+                new Color(0.15f, 0.15f, 0.15f, 0.25f), visibleTop, visibleBottom);
+        }
+
+        if (!record.HasValueField)
+        {
+            return;
+        }
+
+        var value = GetFormattedValue(record);
+        if (!string.IsNullOrEmpty(value))
+        {
+            DrawDetailBlockIfVisible(ref curY, detailsWidth, value.Trim(), new Color(0.2f, 0.2f, 0.2f, 0.25f),
+                visibleTop, visibleBottom, 8f);
+        }
+    }
+
+    private static void DrawDetailBlockIfVisible(ref float curY, float width, string text, Color bg, float visibleTop,
+        float visibleBottom, float extraBottomPadding = 4f)
     {
         var h = calcValueHeight(text, width);
-        var valueRect = new Rect(24f, curY, width, h);
-        Widgets.DrawBoxSolid(new Rect(valueRect.x - 4f, valueRect.y - 2f, valueRect.width + 8f, valueRect.height + 4f),
-            bg);
-        var oldWrap = Text.WordWrap;
-        Text.WordWrap = true;
-        Text.Font = GameFont.Tiny;
-        Widgets.Label(valueRect, text);
-        Text.Font = GameFont.Small;
-        Text.WordWrap = oldWrap;
+        if (IsVisible(curY, h + extraBottomPadding, visibleTop, visibleBottom))
+        {
+            var valueRect = new Rect(24f, curY, width, h);
+            Widgets.DrawBoxSolid(new Rect(valueRect.x - 4f, valueRect.y - 2f, valueRect.width + 8f,
+                valueRect.height + 4f), bg);
+            var oldWrap = Text.WordWrap;
+            Text.WordWrap = true;
+            Text.Font = GameFont.Tiny;
+            Widgets.Label(valueRect, text);
+            Text.Font = GameFont.Small;
+            Text.WordWrap = oldWrap;
+        }
+
         curY += h + extraBottomPadding;
+    }
+
+    private static bool IsVisible(float y, float height, float visibleTop, float visibleBottom)
+    {
+        return y + height >= visibleTop && y <= visibleBottom;
+    }
+
+    private static string GetFormattedValue(PatchRecord record)
+    {
+        // Lazy one-shot value formatting. Caching here is more important than caching
+        // in getPatchValue because this is keyed by row/patch and survives redraws.
+        if (record.ValueComputed)
+        {
+            return record.FormattedValue;
+        }
+
+        record.FormattedValue = record.Patch == null ? string.Empty : getPatchValue(record.Patch);
+        record.ValueComputed = true;
+        return record.FormattedValue;
+    }
+
+    private static Dictionary<ModContentPack, int> GetLoadOrderMap()
+    {
+        var mods = LoadedModManager.RunningModsListForReading;
+        if (loadOrderMap != null && loadOrderCount == mods.Count)
+        {
+            return loadOrderMap;
+        }
+
+        loadOrderMap = new Dictionary<ModContentPack, int>(mods.Count);
+        for (var i = 0; i < mods.Count; i++)
+        {
+            loadOrderMap[mods[i]] = i;
+        }
+
+        loadOrderCount = mods.Count;
+        return loadOrderMap;
     }
 
     private static ModContentPack resolveModForIndex(int index)
     {
+        // Prefer the mod captured at patch-apply time. Nested PatchOperationSequence
+        // children may not carry their own direct mod entry, so fall back to the most
+        // recent prior mod and finally to sourceFile/root-dir inference.
         if (index < VisualXMLPatches.Mods.Count)
         {
             var direct = VisualXMLPatches.Mods[index];
@@ -410,25 +775,32 @@ internal class VisualXMLPatchesMod : Mod
         return null;
     }
 
-    private static bool getOrAssignDefaultCollapsed(ModContentPack mod, bool groupHasFailure)
+    private static string GetModKey(ModContentPack mod)
     {
         if (mod == null)
         {
-            return false;
+            return "<unknown>";
         }
 
-        if (collapsedPerMod.TryGetValue(mod, out var collapsed))
+        return $"{mod.PackageIdPlayerFacing}|{mod.Name}|{mod.RootDir}";
+    }
+
+    private static bool getOrAssignDefaultCollapsed(string modKey, bool groupHasFailure)
+    {
+        if (collapsedPerMod.TryGetValue(modKey, out var collapsed))
         {
             return collapsed;
         }
 
         collapsed = !groupHasFailure;
-        collapsedPerMod[mod] = collapsed;
+        collapsedPerMod[modKey] = collapsed;
         return collapsed;
     }
 
     private static FieldInfo getFieldCached(Type t, string fieldName)
     {
+        // Field lookup is cached separately from field value extraction. Values are
+        // per patch and can change/contain different objects; FieldInfo is per type.
         var key = (t, fieldName);
         if (fieldCache.TryGetValue(key, out var fi))
         {
@@ -476,8 +848,30 @@ internal class VisualXMLPatchesMod : Mod
         return false;
     }
 
+    private static bool hasPatchValueField(PatchOperation patch)
+    {
+        // Cheap existence check used for the expand marker. It intentionally does not
+        // stringify or format the value.
+        try
+        {
+            var fi = getFieldCached(patch.GetType(), "value");
+            if (fi == null)
+            {
+                return false;
+            }
+
+            return fi.GetValue(patch) != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static string getPatchValue(PatchOperation patch)
     {
+        // Expensive path. Keep it out of indexing/search/drawing collapsed rows. XML
+        // containers and nodes are formatted for readability only after expansion.
         try
         {
             var fi = getFieldCached(patch.GetType(), "value");
@@ -638,32 +1032,11 @@ internal class VisualXMLPatchesMod : Mod
             : $"operations: {string.Join(", ", ops.Select(o => o.GetType().Name.Replace("PatchOperation", string.Empty)))}";
     }
 
-    private static string getPatchOperationsDetail(PatchOperation patch)
-    {
-        var ops = getSubOperations(patch).ToList();
-        if (ops.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        var sb = new StringBuilder();
-        sb.AppendLine("operations:");
-        var idx = 1;
-        foreach (var op in ops)
-        {
-            var type = op.GetType().Name.Replace("PatchOperation", string.Empty);
-            var xp = getPatchXPath(op);
-            sb.Append("  ").Append(idx++).Append(") ").Append(type);
-            if (!string.IsNullOrEmpty(xp) && xp != "(no xpath)")
-            {
-                sb.Append(" | ").Append(shorten(xp, 80));
-            }
-
-            sb.AppendLine();
-        }
-
-        return sb.ToString().TrimEnd();
-    }
+    // The previous implementation also built a verbose operations detail block for
+    // height calculation, but it was never drawn. That unused work was removed
+    // instead of cached because caching dead UI data would only preserve the cost in
+    // a different place. getPatchOperationsSummary remains because it is cheap, shown
+    // in collapsed rows when xpath is absent, and included in search.
 
     private static void openSourceFile(string path, ModContentPack mod)
     {
@@ -730,8 +1103,19 @@ internal class VisualXMLPatchesMod : Mod
         return $"{value[..(max - 3)]}...";
     }
 
+    private static bool ContainsIgnoreCase(string text, string query)
+    {
+        // Avoid ToLowerInvariant/ToUpperInvariant in the hot search path; those allocate
+        // a new string per row. OrdinalIgnoreCase gives a case-insensitive scan without
+        // building lowercase copies.
+        return !string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(query) &&
+               text.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
     private static string maybeFormatXmlString(string input)
     {
+        // Fast reject non-XML-looking strings. This keeps plain text values from paying
+        // XmlDocument parsing costs.
         if (string.IsNullOrEmpty(input))
         {
             return string.Empty;
@@ -761,12 +1145,20 @@ internal class VisualXMLPatchesMod : Mod
 
         try
         {
-            if (node is XmlDocument doc)
+            using var sw = new StringWriter();
+            using (var xw = XmlWriter.Create(sw, PrettyXmlSettings))
             {
-                return formatXmlFragment(doc.OuterXml);
+                if (node is XmlDocument doc)
+                {
+                    doc.DocumentElement?.WriteTo(xw);
+                }
+                else
+                {
+                    node.WriteTo(xw);
+                }
             }
 
-            return formatXmlFragment(node.OuterXml);
+            return sw.ToString().Trim();
         }
         catch
         {
@@ -795,20 +1187,15 @@ internal class VisualXMLPatchesMod : Mod
                 tempDoc.LoadXml(wrapped);
             }
 
-            var settings = new XmlWriterSettings
-            {
-                Indent = true,
-                IndentChars = "  ",
-                NewLineChars = "\n",
-                NewLineHandling = NewLineHandling.Replace,
-                OmitXmlDeclaration = true
-            };
             using var sw = new StringWriter();
-            using (var xw = XmlWriter.Create(sw, settings))
+            using (var xw = XmlWriter.Create(sw, PrettyXmlSettings))
             {
                 if (wrapped == fragment)
                 {
-                    tempDoc.Save(xw);
+                    if (tempDoc.DocumentElement != null)
+                    {
+                        tempDoc.DocumentElement.WriteTo(xw);
+                    }
                 }
                 else
                 {
@@ -830,5 +1217,20 @@ internal class VisualXMLPatchesMod : Mod
         {
             return fragment.Trim();
         }
+    }
+
+    private static void DrawVersion(Rect rect)
+    {
+        if (string.IsNullOrEmpty(currentVersion))
+        {
+            return;
+        }
+
+        var verRect = new Rect(rect.x, rect.yMax - 18f, rect.width, 18f);
+        Text.Font = GameFont.Tiny;
+        GUI.color = Color.gray;
+        Widgets.Label(verRect, "VXP.ModVersion".Translate(currentVersion));
+        GUI.color = Color.white;
+        Text.Font = GameFont.Small;
     }
 }
