@@ -29,6 +29,7 @@ internal sealed class PatchRecord
     public string ModsSummary = string.Empty;
     public string OperationsSummary = string.Empty;
     public string DisplayXPath = string.Empty;
+    public string DisplayXPathSingleLine = string.Empty;
 
     // Cached search haystack for cheap fields. Patch values are deliberately separate
     // so XML value search can stay opt-in without changing ordinary search cost.

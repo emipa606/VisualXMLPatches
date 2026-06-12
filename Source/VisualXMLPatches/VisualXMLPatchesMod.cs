@@ -26,6 +26,8 @@ internal class VisualXMLPatchesMod : Mod
     private const float HeaderHeight = 40f;
     private const float RowHeight = 32f;
     private const float OpenWidth = 60f;
+    private const float DetailIndent = 24f;
+    private const float DetailRightPadding = OpenWidth + 20f;
     private const float CollapseButtonWidth = 110f;
     private const float ValueToggleWidth = 280f;
     private const float SearchDebounceSeconds = 0.25f;
@@ -119,7 +121,10 @@ internal class VisualXMLPatchesMod : Mod
 
         var outRect = lowerRect;
         var viewWidth = outRect.width - 16f;
-        var detailsWidth = viewWidth - 70f;
+        // Detail blocks sit under patch rows, but should not extend under the
+        // right-side Open buttons. Use the same width for height calculation and
+        // drawing so wrapped details cannot overlap later rows.
+        var detailsWidth = Math.Max(120f, viewWidth - DetailIndent - DetailRightPadding);
         var totalHeightCalc = CalculateTotalHeight(detailsWidth);
         var viewRect = new Rect(0f, 0f, viewWidth, Math.Max(totalHeightCalc + 10f, outRect.height - 1f));
         // The scroll view may contain tens of thousands of rows. We still advance
@@ -402,6 +407,7 @@ internal class VisualXMLPatchesMod : Mod
             ModsSummary = modsSummary,
             OperationsSummary = operationsSummary,
             DisplayXPath = displayXPath,
+            DisplayXPathSingleLine = normalizeSingleLine(displayXPath),
             HasValueField = patch != null && hasPatchValueField(patch)
         };
 
@@ -689,7 +695,7 @@ internal class VisualXMLPatchesMod : Mod
         var displayIndex = record.Index + 1;
         var marker = record.HasDetails ? expanded ? "-" : "+" : " ";
         var statusTag = record.Success ? string.Empty : " [FAIL]";
-        var label = $"{marker} #{displayIndex}: {record.PatchTypeDisplay}{statusTag} | {shorten(record.DisplayXPath, 80)}";
+        var label = $"{marker} #{displayIndex}: {record.PatchTypeDisplay}{statusTag} | {shorten(record.DisplayXPathSingleLine, 120)}";
 
         if (Mouse.IsOver(rowRect))
         {
@@ -732,7 +738,10 @@ internal class VisualXMLPatchesMod : Mod
             GUI.color = ColorLibrary.RedReadable;
         }
 
+        var oldWrap = Text.WordWrap;
+        Text.WordWrap = false;
         Widgets.Label(labelRectRow, label);
+        Text.WordWrap = oldWrap;
         if (record.Failed)
         {
             GUI.color = Color.white;
@@ -780,7 +789,7 @@ internal class VisualXMLPatchesMod : Mod
         var h = calcValueHeight(text, width);
         if (IsVisible(curY, h + extraBottomPadding, visibleTop, visibleBottom))
         {
-            var valueRect = new Rect(24f, curY, width, h);
+            var valueRect = new Rect(DetailIndent, curY, width, h);
             Widgets.DrawBoxSolid(new Rect(valueRect.x - 4f, valueRect.y - 2f, valueRect.width + 8f,
                 valueRect.height + 4f), bg);
             var oldWrap = Text.WordWrap;
@@ -1285,6 +1294,39 @@ internal class VisualXMLPatchesMod : Mod
         Text.Font = GameFont.Small;
         Text.WordWrap = oldWrap;
         return h;
+    }
+
+    private static string normalizeSingleLine(string value)
+    {
+        // Patch xpaths and sequence summaries can contain embedded newlines or
+        // indentation. Normal rows are fixed-height for scrolling performance, so
+        // keep row labels to one physical line and expose the full text by tooltip.
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        var sb = new StringBuilder(value.Length);
+        var previousWasWhitespace = false;
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c = value[i];
+            if (char.IsWhiteSpace(c))
+            {
+                if (!previousWasWhitespace)
+                {
+                    sb.Append(' ');
+                    previousWasWhitespace = true;
+                }
+            }
+            else
+            {
+                sb.Append(c);
+                previousWasWhitespace = false;
+            }
+        }
+
+        return sb.ToString().Trim();
     }
 
     private static string shorten(string value, int max)

@@ -47,3 +47,8 @@ Do not replace the ordered patch list with a `HashSet`. Patch order is part of w
 Do not move work back into `DoSettingsWindowContents` unless it is strictly drawing. If a future feature needs reflection, grouping, sorting, or XML formatting, add it behind a cache or lazy path.
 
 Do not add a separate .NET helper process unless profiling proves in-process cached search is still insufficient. The current bottleneck was Unity/RimWorld-side UI recomputation, not modern .NET regex or text-processing throughput.
+
+
+## Fixed-height row labels
+
+Patch xpaths and sequence summaries may contain embedded newlines or enough text to wrap in the settings window. Normal patch rows deliberately remain fixed-height so scrolling large result sets stays cheap and predictable. Row labels are therefore normalized to a single line and clipped/truncated for display, while the full xpath/summary remains available in the tooltip and expanded details. Detail blocks use the same width for measurement and drawing so hidden XML-value notices and formatted values cannot overlap following rows.
