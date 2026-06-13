@@ -10,7 +10,7 @@ internal sealed class VisualXMLPatchesSettings : ModSettings
 
     public override void ExposeData()
     {
-        Scribe_Values.Look(ref IncludeXmlValues, "includeXmlValues", false);
+        Scribe_Values.Look(ref IncludeXmlValues, "includeXmlValues");
         base.ExposeData();
     }
 }

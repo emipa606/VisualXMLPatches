@@ -17,7 +17,7 @@ internal partial class VisualXMLPatchesMod
         var collapseRect = new Rect(topRect.xMax - CollapseButtonWidth, controlsY, CollapseButtonWidth,
             TopControlHeight);
         var toggleLabel = "VXP.IncludeXmlValues".Translate().ToString();
-        // CheckboxLabeled draws the label at the left of its rect and the check box
+        // CheckboxLabeled draws the label at the left of its rect and the checkbox
         // at the right. Size the rect to the text instead of using a broad fixed
         // area so the label stays visually connected to the check mark.
         var toggleWidth = Text.CalcSize(toggleLabel).x + ValueToggleLabelGap + ValueToggleCheckboxSize;
@@ -39,12 +39,24 @@ internal partial class VisualXMLPatchesMod
             OnIncludeXmlValuesChanged();
         }
 
-        if (Widgets.ButtonText(collapseRect, "VXP.CollapseAll".Translate()))
+        if (groupedRecords.Any(view => !view.Collapsed))
         {
-            CollapseAllVisible();
-        }
+            if (Widgets.ButtonText(collapseRect, "VXP.CollapseAll".Translate()))
+            {
+                CollapseAllVisible();
+            }
 
-        TooltipHandler.TipRegion(collapseRect, "VXP.CollapseAllTooltip".Translate());
+            TooltipHandler.TipRegion(collapseRect, "VXP.CollapseAllTooltip".Translate());
+        }
+        else
+        {
+            if (Widgets.ButtonText(collapseRect, "VXP.ExpandAll".Translate()))
+            {
+                ExpandAllVisible();
+            }
+
+            TooltipHandler.TipRegion(collapseRect, "VXP.ExpandAllTooltip".Translate());
+        }
     }
 
     private void OnIncludeXmlValuesChanged()
@@ -69,11 +81,27 @@ internal partial class VisualXMLPatchesMod
 
         // Collapse only groups in the current filtered view, but clear expanded rows
         // globally so hidden expanded details do not reappear when the search changes.
-        for (var i = 0; i < groupedRecords.Count; i++)
+        foreach (var group in groupedRecords)
         {
-            var group = groupedRecords[i];
             group.Collapsed = true;
             collapsedPerMod[group.Key] = true;
+        }
+    }
+
+    private static void ExpandAllVisible()
+    {
+        expandedPatches.Clear();
+
+        // Expand only groups in the current filtered view as well as rows, but clear expanded rows
+        // globally so hidden expanded details do not reappear when the search changes.
+        foreach (var group in groupedRecords)
+        {
+            group.Collapsed = false;
+            collapsedPerMod[group.Key] = false;
+            foreach (var groupRecord in group.Records)
+            {
+                expandedPatches.Add(groupRecord.Index);
+            }
         }
     }
 
@@ -101,7 +129,7 @@ internal partial class VisualXMLPatchesMod
             Widgets.DrawBoxSolid(iconRect, new Color(0f, 0f, 0f, 0.3f));
             Text.Anchor = TextAnchor.MiddleCenter;
             Text.Font = GameFont.Tiny;
-            Widgets.Label(iconRect, group.Mod == null ? "(unknown)" : "no img");
+            Widgets.Label(iconRect, group.Mod == null ? "VXP.Unknown".Translate() : "VXP.NoImage".Translate());
             Text.Font = GameFont.Small;
             Text.Anchor = TextAnchor.UpperLeft;
         }
@@ -129,7 +157,9 @@ internal partial class VisualXMLPatchesMod
         }
 
         TooltipHandler.TipRegion(headerRect,
-            group.PackageId + (group.HasFailure ? $"\nFailed patches: {group.FailedCount}" : string.Empty));
+            group.PackageId + (group.HasFailure
+                ? Environment.NewLine + "VXP.FailedPatches".Translate(group.FailedCount)
+                : string.Empty));
         Text.Anchor = TextAnchor.UpperLeft;
     }
 
@@ -160,7 +190,8 @@ internal partial class VisualXMLPatchesMod
             TooltipHandler.TipRegion(openRect, record.SourceFile);
         }
 
-        var labelRectRow = new Rect(rowRect.x + RowHorizontalPadding, rowRect.y + 2f, GetPatchRowTextWidth(rowRect.width),
+        var labelRectRow = new Rect(rowRect.x + RowHorizontalPadding, rowRect.y + 2f,
+            GetPatchRowTextWidth(rowRect.width),
             Math.Max(1f, rowRect.height - 4f));
         Text.Anchor = TextAnchor.MiddleLeft;
         if (record.HasDetails && Widgets.ButtonInvisible(labelRectRow))
@@ -202,7 +233,7 @@ internal partial class VisualXMLPatchesMod
         // only for rows they intentionally inspect.
         if (!string.IsNullOrEmpty(record.Attribute))
         {
-            DrawDetailBlockIfVisible(ref curY, detailsWidth, $"attribute: {record.Attribute}",
+            DrawDetailBlockIfVisible(ref curY, detailsWidth, "VXP.Attribute".Translate(record.Attribute),
                 new Color(0.15f, 0.15f, 0.15f, 0.25f), visibleTop, visibleBottom);
         }
 

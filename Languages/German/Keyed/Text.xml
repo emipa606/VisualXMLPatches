@@ -12,4 +12,16 @@
   <VXP.XmlValueHidden>XML-Wert ausgeblendet. Aktivieren Sie XML-Werte einbeziehen, um ihn anzuzeigen oder zu suchen.</VXP.XmlValueHidden>
   <VXP.FoundPatches>Insgesamt angewandte Patches: {0}</VXP.FoundPatches>
   <VXP.Open>Öffnen Sie</VXP.Open>
+  <VXP.ExpandAll>Alles erweitern</VXP.ExpandAll>
+  <VXP.ExpandAllTooltip>Erweitern Sie alle sichtbaren Mod-Gruppen und Patch-Details.</VXP.ExpandAllTooltip>
+  <VXP.FailedPatches>Fehlgeschlagene Patches: {0}</VXP.FailedPatches>
+  <VXP.Unknown>(unbekannt)</VXP.Unknown>
+  <VXP.NoImage>kein img</VXP.NoImage>
+  <VXP.Attribute>Attribut</VXP.Attribute>
+  <VXP.FileNotFound>Datei nicht gefunden: {0}</VXP.FileNotFound>
+  <VXP.Fail>[FAIL]</VXP.Fail>
+  <VXP.UnknownMod>Unbekannte Mod</VXP.UnknownMod>
+  <VXP.NoXPath>(kein xpath)</VXP.NoXPath>
+  <VXP.Mods>Mods: {0}</VXP.Mods>
+  <VXP.Operations>Operationen: {0}</VXP.Operations>
 </LanguageData>

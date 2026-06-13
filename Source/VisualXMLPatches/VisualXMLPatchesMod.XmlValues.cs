@@ -1,7 +1,6 @@
-using System.Linq;
-using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Xml;
 using Verse;
@@ -265,10 +264,7 @@ internal partial class VisualXMLPatchesMod
             {
                 if (wrapped == fragment)
                 {
-                    if (tempDoc.DocumentElement != null)
-                    {
-                        tempDoc.DocumentElement.WriteTo(xw);
-                    }
+                    tempDoc.DocumentElement?.WriteTo(xw);
                 }
                 else
                 {

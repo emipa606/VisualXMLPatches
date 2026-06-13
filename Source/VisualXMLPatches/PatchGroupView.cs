@@ -10,16 +10,15 @@ namespace VisualXMLPatches;
 // preserves the original patch application order inside each mod group.
 internal sealed class PatchGroupView
 {
-    public ModContentPack Mod;
-    public string Key = string.Empty;
-    public string ModName = string.Empty;
-    public string PackageId = string.Empty;
-    public int LoadOrderIndex = int.MaxValue;
-
-    public readonly List<PatchRecord> Records = new();
+    public readonly List<PatchRecord> Records = [];
+    public bool Collapsed;
 
     public int Count;
     public int FailedCount;
     public bool HasFailure;
-    public bool Collapsed;
+    public string Key = string.Empty;
+    public int LoadOrderIndex = int.MaxValue;
+    public ModContentPack Mod;
+    public string ModName = string.Empty;
+    public string PackageId = string.Empty;
 }

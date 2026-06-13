@@ -12,4 +12,16 @@
   <VXP.XmlValueHidden>XML 值已隐藏。启用“包含 XML 值”即可显示或搜索。</VXP.XmlValueHidden>
   <VXP.FoundPatches>已应用的补丁总数：{0}</VXP.FoundPatches>
   <VXP.Open>打开</VXP.Open>
+  <VXP.ExpandAll>全部展开</VXP.ExpandAll>
+  <VXP.ExpandAllTooltip>展开所有可见的 mod 组和补丁详情。</VXP.ExpandAllTooltip>
+  <VXP.FailedPatches>失败的补丁：{0}</VXP.FailedPatches>
+  <VXP.Unknown>(未知)</VXP.Unknown>
+  <VXP.NoImage>无图像</VXP.NoImage>
+  <VXP.Attribute>属性</VXP.Attribute>
+  <VXP.FileNotFound>未找到文件：{0}</VXP.FileNotFound>
+  <VXP.Fail>[失败］</VXP.Fail>
+  <VXP.UnknownMod>未知模块</VXP.UnknownMod>
+  <VXP.NoXPath>(无 xpath）</VXP.NoXPath>
+  <VXP.Mods>mods：{0}</VXP.Mods>
+  <VXP.Operations>操作：{0}</VXP.Operations>
 </LanguageData>

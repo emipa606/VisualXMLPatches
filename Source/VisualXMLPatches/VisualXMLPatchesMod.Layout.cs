@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 using Verse;
 
 namespace VisualXMLPatches;
@@ -14,18 +13,16 @@ internal partial class VisualXMLPatchesMod
         // correct. Patch row heights are cached per display width, which keeps
         // bounded multiline rows from becoming a repeated IMGUI-layout cost.
         var totalHeight = 0f;
-        for (var g = 0; g < groupedRecords.Count; g++)
+        foreach (var group in groupedRecords)
         {
-            var group = groupedRecords[g];
             totalHeight += HeaderHeight;
             if (group.Collapsed)
             {
                 continue;
             }
 
-            for (var r = 0; r < group.Records.Count; r++)
+            foreach (var record in group.Records)
             {
-                var record = group.Records[r];
                 var rowWidth = GetPatchRowWidth(record, viewWidth);
                 var rowTextWidth = GetPatchRowTextWidth(rowWidth);
                 totalHeight += GetPatchRowHeight(record, rowTextWidth);
@@ -125,20 +122,22 @@ internal partial class VisualXMLPatchesMod
             height += calcValueHeight($"attribute: {record.Attribute}", detailsWidth) + 4f;
         }
 
-        if (record.HasValueField)
+        if (!record.HasValueField)
         {
-            if (includeXmlValues)
+            return height;
+        }
+
+        if (includeXmlValues)
+        {
+            var value = GetFormattedValue(record);
+            if (!string.IsNullOrEmpty(value))
             {
-                var value = GetFormattedValue(record);
-                if (!string.IsNullOrEmpty(value))
-                {
-                    height += calcValueHeight(value.Trim(), detailsWidth) + 8f;
-                }
+                height += calcValueHeight(value.Trim(), detailsWidth) + 8f;
             }
-            else
-            {
-                height += calcValueHeight("VXP.XmlValueHidden".Translate(), detailsWidth) + 8f;
-            }
+        }
+        else
+        {
+            height += calcValueHeight("VXP.XmlValueHidden".Translate(), detailsWidth) + 8f;
         }
 
         return height;

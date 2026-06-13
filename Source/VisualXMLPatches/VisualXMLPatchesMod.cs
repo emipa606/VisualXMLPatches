@@ -1,14 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Xml;
 using HarmonyLib;
 using Mlie;
-using RimWorld;
 using UnityEngine;
 using Verse;
 
@@ -163,9 +158,8 @@ internal partial class VisualXMLPatchesMod : Mod
                 continue;
             }
 
-            for (var i = 0; i < group.Records.Count; i++)
+            foreach (var record in group.Records)
             {
-                var record = group.Records[i];
                 var expanded = expandedPatches.Contains(record.Index);
                 var rowWidth = GetPatchRowWidth(record, viewRect.width);
                 var rowTextWidth = GetPatchRowTextWidth(rowWidth);
@@ -194,6 +188,4 @@ internal partial class VisualXMLPatchesMod : Mod
         Widgets.EndScrollView();
         DrawVersion(rect);
     }
-
-
 }

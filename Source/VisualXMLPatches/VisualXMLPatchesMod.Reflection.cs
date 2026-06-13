@@ -41,7 +41,7 @@ internal partial class VisualXMLPatchesMod
             // ignored
         }
 
-        return "(no xpath)";
+        return "VXP.NoXPath".Translate();
     }
 
     private static bool getNeverSucceeded(PatchOperation patch)
@@ -116,12 +116,12 @@ internal partial class VisualXMLPatchesMod
                 case IEnumerable<object> list:
                 {
                     var items = list.Select(o => o?.ToString()).Where(s => !string.IsNullOrEmpty(s)).ToList();
-                    return items.Count == 0 ? string.Empty : $"mods: {string.Join(", ", items)}";
+                    return items.Count == 0 ? string.Empty : "VXP.Mods".Translate(string.Join(", ", items));
                 }
                 default:
                 {
                     var str = raw.ToString();
-                    return string.IsNullOrEmpty(str) ? string.Empty : $"mods: {str}";
+                    return string.IsNullOrEmpty(str) ? string.Empty : "VXP.Mods".Translate(str);
                 }
             }
         }
@@ -167,6 +167,7 @@ internal partial class VisualXMLPatchesMod
         var ops = getSubOperations(patch).Take(10).ToList();
         return ops.Count == 0
             ? string.Empty
-            : $"operations: {string.Join(", ", ops.Select(o => o.GetType().Name.Replace("PatchOperation", string.Empty)))}";
+            : "VXP.Operations".Translate(string.Join(", ",
+                ops.Select(o => o.GetType().Name.Replace("PatchOperation", string.Empty))));
     }
 }

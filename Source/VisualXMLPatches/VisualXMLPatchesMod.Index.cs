@@ -40,12 +40,14 @@ internal partial class VisualXMLPatchesMod
             refreshedPatchDiscoveryForUi = true;
         }
 
-        if (VisualXMLPatches.EnsureCapturedPatchListComplete())
+        if (!VisualXMLPatches.EnsureCapturedPatchListComplete())
         {
-            indexDirty = true;
-            filterDirty = true;
-            groupsDirty = true;
+            return;
         }
+
+        indexDirty = true;
+        filterDirty = true;
+        groupsDirty = true;
     }
 
     private static void EnsureResultsAligned()
@@ -83,8 +85,8 @@ internal partial class VisualXMLPatchesMod
 
         for (var i = 0; i < count; i++)
         {
-            var patch = VisualXMLPatches.Patches[i];
-            var success = VisualXMLPatches.Results[i];
+            var patch = VisualXMLPatches.Patches?[i];
+            var success = VisualXMLPatches.Results != null && VisualXMLPatches.Results[i];
             var record = BuildPatchRecord(i, patch, success, loadOrder);
             patchRecords.Add(record);
         }
@@ -112,7 +114,7 @@ internal partial class VisualXMLPatchesMod
         var attribute = patch == null ? string.Empty : getPatchAttribute(patch);
         var modsSummary = patch == null ? string.Empty : getPatchMods(patch);
         var operationsSummary = patch == null ? string.Empty : getPatchOperationsSummary(patch);
-        var displayXPath = xpath == "(no xpath)"
+        var displayXPath = xpath == "VXP.NoXPath".Translate()
             ? !string.IsNullOrEmpty(operationsSummary)
                 ? operationsSummary
                 : !string.IsNullOrEmpty(modsSummary)
@@ -125,7 +127,7 @@ internal partial class VisualXMLPatchesMod
             Index = index,
             Patch = patch,
             Mod = mod,
-            ModName = mod?.Name ?? "<Unknown Mod>",
+            ModName = mod?.Name ?? "VXP.UnknownMod".Translate(),
             PackageId = mod?.PackageIdPlayerFacing ?? string.Empty,
             LoadOrderIndex = GetLoadOrderIndex(loadOrder, mod),
             Success = success,
@@ -155,7 +157,7 @@ internal partial class VisualXMLPatchesMod
             return int.MaxValue;
         }
 
-        return loadOrder.TryGetValue(mod, out var index) ? index : int.MaxValue;
+        return loadOrder.GetValueOrDefault(mod, int.MaxValue);
     }
 
     private static string BuildSearchText(PatchRecord record)

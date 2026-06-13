@@ -71,9 +71,8 @@ internal partial class VisualXMLPatchesMod
         }
         else
         {
-            for (var i = 0; i < patchRecords.Count; i++)
+            foreach (var record in patchRecords)
             {
-                var record = patchRecords[i];
                 if (MatchesSearch(record, query))
                 {
                     filteredRecords.Add(record);

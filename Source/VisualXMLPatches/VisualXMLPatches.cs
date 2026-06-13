@@ -11,15 +11,15 @@ public class VisualXMLPatches
     public static List<PatchOperation> Patches;
     public static List<bool> Results = [];
     public static readonly List<ModContentPack> Mods = []; // aligned 1:1 with Patches as they are applied
-    internal static readonly Dictionary<PatchOperation, ModContentPack> PatchToMod = new();
+    private static readonly Dictionary<PatchOperation, ModContentPack> PatchToMod = new();
 
     // Ordered discovery fallback. The Harmony hook is still the preferred source
     // because it records actual Apply calls, but mod construction/load timing can
     // leave the hook with only late patches in some load orders. Rebuilding this
     // map from RunningMods after startup gives the UI a complete, stable fallback
     // and also repairs mod ownership for patches captured before the map was ready.
-    internal static readonly List<PatchOperation> DiscoveredPatches = [];
-    internal static readonly List<ModContentPack> DiscoveredMods = [];
+    private static readonly List<PatchOperation> DiscoveredPatches = [];
+    private static readonly List<ModContentPack> DiscoveredMods = [];
 
     private static readonly FieldInfo operationsField = typeof(PatchOperation).GetField("operations",
         BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);

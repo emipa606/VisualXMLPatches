@@ -26,9 +26,8 @@ internal partial class VisualXMLPatchesMod
         groupedRecords.Clear();
         groupBuildMap.Clear();
 
-        for (var i = 0; i < filteredRecords.Count; i++)
+        foreach (var record in filteredRecords)
         {
-            var record = filteredRecords[i];
             var key = GetModKey(record.Mod);
             if (!groupBuildMap.TryGetValue(key, out var group))
             {
@@ -46,39 +45,34 @@ internal partial class VisualXMLPatchesMod
 
             group.Records.Add(record);
             group.Count++;
-            if (record.Failed)
+            if (!record.Failed)
             {
-                group.FailedCount++;
-                group.HasFailure = true;
+                continue;
             }
+
+            group.FailedCount++;
+            group.HasFailure = true;
         }
 
         groupedRecords.Sort(CompareGroups);
-        for (var i = 0; i < groupedRecords.Count; i++)
+        foreach (var patchGroupView in groupedRecords)
         {
-            groupedRecords[i].Collapsed = getOrAssignDefaultCollapsed(groupedRecords[i].Key, groupedRecords[i].HasFailure);
+            patchGroupView.Collapsed =
+                getOrAssignDefaultCollapsed(patchGroupView.Key, patchGroupView.HasFailure);
         }
     }
 
     private static int CompareGroups(PatchGroupView a, PatchGroupView b)
     {
         var loadCompare = a.LoadOrderIndex.CompareTo(b.LoadOrderIndex);
-        if (loadCompare != 0)
-        {
-            return loadCompare;
-        }
-
-        return string.Compare(a.ModName, b.ModName, StringComparison.OrdinalIgnoreCase);
+        return loadCompare != 0
+            ? loadCompare
+            : string.Compare(a.ModName, b.ModName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetModKey(ModContentPack mod)
     {
-        if (mod == null)
-        {
-            return "<unknown>";
-        }
-
-        return $"{mod.PackageIdPlayerFacing}|{mod.Name}|{mod.RootDir}";
+        return mod == null ? "<unknown>" : $"{mod.PackageIdPlayerFacing}|{mod.Name}|{mod.RootDir}";
     }
 
     private static bool getOrAssignDefaultCollapsed(string modKey, bool groupHasFailure)

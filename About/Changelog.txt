@@ -1,5 +1,9 @@
 # Changelog for VisualXMLPatches
 
+1.6.2 - Performance updates by flumignano
+Used DeepL to update translations for ChineseSimplified, French, German
+
+
 1.6.1 - Update to see if Steam auto-mod wakes up
 
 

@@ -12,4 +12,16 @@
   <VXP.XmlValueHidden>Valeur XML masquée. Activez Inclure les valeurs XML pour l’afficher ou la rechercher.</VXP.XmlValueHidden>
   <VXP.FoundPatches>Total des correctifs appliqués : {0}</VXP.FoundPatches>
   <VXP.Open>Ouvrir</VXP.Open>
+  <VXP.ExpandAll>Développer tout</VXP.ExpandAll>
+  <VXP.ExpandAllTooltip>Développez tous les groupes de mods visibles et les détails des patchs.</VXP.ExpandAllTooltip>
+  <VXP.FailedPatches>Patchs échoués : {0}</VXP.FailedPatches>
+  <VXP.Unknown>(inconnu)</VXP.Unknown>
+  <VXP.NoImage>pas d'img</VXP.NoImage>
+  <VXP.Attribute>attribut</VXP.Attribute>
+  <VXP.FileNotFound>Fichier non trouvé : {0}</VXP.FileNotFound>
+  <VXP.Fail>[FAIL]</VXP.Fail>
+  <VXP.UnknownMod>Mod inconnu</VXP.UnknownMod>
+  <VXP.NoXPath>(pas de xpath)</VXP.NoXPath>
+  <VXP.Mods>mods : {0}</VXP.Mods>
+  <VXP.Operations>opérations : {0}</VXP.Operations>
 </LanguageData>

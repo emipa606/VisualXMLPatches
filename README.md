@@ -1,6 +1,6 @@
 # [Visual XML Patches](https://steamcommunity.com/sharedfiles/filedetails/?id=3570531169)
 
-![Image](https://i.imgur.com/iCj5o7O.png)
+![Image](https://img.litet.net/logos/Self-Info.png)
 
 This mod will show the XML patches loaded in the game to help in finding the cause of issues.
 It will show the order they are applied, what mod they are from and you can open the relevant file they are defined in.
@@ -9,13 +9,13 @@ If a patch is not applied due to some error, this will be marked in red.
 I made it mostly for my own use but hopefully this will be of some use to someone!
 Using this and the [Unified XML Export]( https://steamcommunity.com/sharedfiles/filedetails/?id=2363322287) makes XML debugging much easier!
 
-![Image](https://i.imgur.com/Ds0rBAD.png)
+![Image](https://img.litet.net/logos/Self-SupportAndDonations.png)
 
 Since modding is just a hobby for me I expect no donations to keep modding. If you still want to show your support you can gift me anything from my [Wishlist](https://store.steampowered.com/wishlist/id/Mlie) or buy me a cup of tea.
 
-[![Image](https://i.imgur.com/VWG0yff.png)](https://ko-fi.com/G2G55DDYD)
+[![Image](https://img.litet.net/logos/Kofi-Small.png)](https://ko-fi.com/G2G55DDYD)
 
-![Image](https://i.imgur.com/5xwDG6H.png)
+![Image](https://img.litet.net/logos/Self-ReportingIssues.png)
 
 
 
@@ -29,4 +29,4 @@ Since modding is just a hobby for me I expect no donations to keep modding. If y
 
  
 
-[![Image](https://img.shields.io/github/v/release/emipa606/VisualXMLPatches?label=latest%20version&style=plastic&labelColor=0070cd&color=white)](https://steamcommunity.com/sharedfiles/filedetails/changelog/3570531169) | tags:  mod troubleshooting,  error identification
+[![Image](https://img.shields.io/github/v/release/emipa606/VisualXMLPatches?label=latest%20version&style=plastic&labelColor=0070cd&color=white)](https://steamcommunity.com/sharedfiles/filedetails/changelog/3570531169) | tags: mod troubleshooting, error identification
