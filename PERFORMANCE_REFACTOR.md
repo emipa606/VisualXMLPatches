@@ -52,3 +52,20 @@ Do not add a separate .NET helper process unless profiling proves in-process cac
 ## Fixed-height row labels
 
 Patch xpaths and sequence summaries may contain embedded newlines or enough text to wrap in the settings window. Normal patch rows deliberately remain fixed-height so scrolling large result sets stays cheap and predictable. Row labels are therefore normalized to a single line and clipped/truncated for display, while the full xpath/summary remains available in the tooltip and expanded details. Detail blocks use the same width for measurement and drawing so hidden XML-value notices and formatted values cannot overlap following rows.
+
+## Source organization
+
+The settings window implementation is intentionally split across partial class files by responsibility. This is mostly a maintenance and reviewability refactor, not a behavior change. The previous single `VisualXMLPatchesMod.cs` file mixed shared state, indexing, search, grouping, layout, drawing, reflection, file opening and XML formatting in one very large file. That made small UI changes harder to verify because unrelated hot-path code lived nearby.
+
+The current split keeps the public mod entry points and shared state in `VisualXMLPatchesMod.cs`, then moves focused responsibilities into sibling partial files:
+
+- `VisualXMLPatchesMod.Index.cs`: patch discovery and `PatchRecord` indexing.
+- `VisualXMLPatchesMod.Search.cs`: debounced query handling and filtering.
+- `VisualXMLPatchesMod.Groups.cs`: filtered record grouping and collapse state.
+- `VisualXMLPatchesMod.Layout.cs`: scroll-height and visibility calculations.
+- `VisualXMLPatchesMod.Draw.cs`: drawing code only.
+- `VisualXMLPatchesMod.XmlValues.cs`: lazy XML value search/display extraction and formatting.
+- `VisualXMLPatchesMod.Reflection.cs`: cached reflection access to `PatchOperation` internals.
+- `VisualXMLPatchesMod.Helpers.cs`: small generic helpers such as file opening and text normalization.
+
+The purpose is to keep the performance-sensitive boundaries visible: drawing should not rediscover patches, search should not format XML unless the user opts in, and layout should use the same geometry rules that drawing uses. Future feature patches should ideally touch only the partial file for the responsibility they are changing.
