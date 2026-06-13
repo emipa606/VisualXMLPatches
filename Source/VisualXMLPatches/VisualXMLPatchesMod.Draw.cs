@@ -16,7 +16,12 @@ internal partial class VisualXMLPatchesMod
         var controlsY = topRect.y + 66f;
         var collapseRect = new Rect(topRect.xMax - CollapseButtonWidth, controlsY, CollapseButtonWidth,
             TopControlHeight);
-        var toggleRect = new Rect(collapseRect.x - ValueToggleWidth - TopControlGap, controlsY, ValueToggleWidth,
+        var toggleLabel = "VXP.IncludeXmlValues".Translate().ToString();
+        // CheckboxLabeled draws the label at the left of its rect and the check box
+        // at the right. Size the rect to the text instead of using a broad fixed
+        // area so the label stays visually connected to the check mark.
+        var toggleWidth = Text.CalcSize(toggleLabel).x + ValueToggleLabelGap + ValueToggleCheckboxSize;
+        var toggleRect = new Rect(collapseRect.x - toggleWidth - TopControlGap, controlsY, toggleWidth,
             TopControlHeight);
         var countRect = new Rect(topRect.x, controlsY, Math.Max(160f, toggleRect.x - topRect.x - TopControlGap),
             TopControlHeight);
@@ -26,7 +31,7 @@ internal partial class VisualXMLPatchesMod
         Text.Anchor = TextAnchor.UpperLeft;
 
         var previousIncludeXmlValues = includeXmlValues;
-        Widgets.CheckboxLabeled(toggleRect, "VXP.IncludeXmlValues".Translate(), ref includeXmlValues);
+        Widgets.CheckboxLabeled(toggleRect, toggleLabel, ref includeXmlValues);
         TooltipHandler.TipRegion(toggleRect, "VXP.IncludeXmlValuesTooltip".Translate());
 
         if (previousIncludeXmlValues != includeXmlValues)

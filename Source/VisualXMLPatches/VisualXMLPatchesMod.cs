@@ -36,7 +36,8 @@ internal partial class VisualXMLPatchesMod : Mod
     private const float DetailIndent = 24f;
     private const float DetailRightPadding = OpenWidth + 20f;
     private const float CollapseButtonWidth = 110f;
-    private const float ValueToggleWidth = 280f;
+    private const float ValueToggleCheckboxSize = 24f;
+    private const float ValueToggleLabelGap = 12f;
     private const float TopControlHeight = 32f;
     private const float TopControlGap = 12f;
     private const float SearchDebounceSeconds = 0.25f;
