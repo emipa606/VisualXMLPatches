@@ -142,6 +142,8 @@ internal partial class VisualXMLPatchesMod
             HasValueField = patch != null && hasPatchValueField(patch)
         };
 
+        record.RowText = BuildPatchRowText(record);
+        record.RowTooltip = BuildPatchRowTooltip(record);
         record.SearchText = BuildSearchText(record);
         return record;
     }

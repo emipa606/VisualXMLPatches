@@ -49,9 +49,11 @@ Do not move work back into `DoSettingsWindowContents` unless it is strictly draw
 Do not add a separate .NET helper process unless profiling proves in-process cached search is still insufficient. The current bottleneck was Unity/RimWorld-side UI recomputation, not modern .NET regex or text-processing throughput.
 
 
-## Fixed-height row labels
+## Bounded multiline row labels
 
-Patch xpaths and sequence summaries may contain embedded newlines or enough text to wrap in the settings window. Normal patch rows deliberately remain fixed-height so scrolling large result sets stays cheap and predictable. Row labels are therefore normalized to a single line and clipped/truncated for display, while the full xpath/summary remains available in the tooltip and expanded details. Detail blocks use the same width for measurement and drawing so hidden XML-value notices and formatted values cannot overlap following rows.
+Patch xpaths and sequence summaries may contain embedded newlines or long separator-heavy paths. Normal patch rows now allow bounded wrapping so the settings window is more readable without forcing users to rely only on tooltips. Row labels are normalized for display and given visual break points after common technical separators, while the full unmodified xpath/summary remains available in the tooltip and expanded details.
+
+To keep large result sets predictable, normal rows are capped at three display lines. Their calculated heights are cached per row width, and the Open button column is reserved on the right so wrapped text cannot run underneath it. Detail blocks still use the same width for measurement and drawing so hidden XML-value notices and formatted values cannot overlap following rows.
 
 ## Source organization
 

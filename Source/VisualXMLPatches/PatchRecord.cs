@@ -30,6 +30,13 @@ internal sealed class PatchRecord
     public string OperationsSummary = string.Empty;
     public string DisplayXPath = string.Empty;
     public string DisplayXPathSingleLine = string.Empty;
+    public string RowText = string.Empty;
+    public string RowTooltip = string.Empty;
+
+    // Cached row height for the current settings window width. Wrapped row labels are
+    // measured once per width so multiline display does not become a new hot path.
+    public float CachedRowTextWidth = -1f;
+    public float CachedRowHeight = -1f;
 
     // Cached search haystack for cheap fields. Patch values are deliberately separate
     // so XML value search can stay opt-in without changing ordinary search cost.

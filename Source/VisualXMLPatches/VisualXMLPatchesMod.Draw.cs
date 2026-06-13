@@ -10,29 +10,36 @@ internal partial class VisualXMLPatchesMod
 
     private void DrawTopControls(Rect topRect)
     {
-        var countRect = new Rect(topRect.x, topRect.y + 64f, 520f, 30f);
-        Widgets.Label(countRect, "VXP.FoundPatches".Translate($"{filteredRecords.Count}/{patchRecords.Count}"));
+        // Keep all secondary controls on one row. Listing_Standard is useful for
+        // vertical forms, but direct rects give better alignment beside the count
+        // label and the Collapse All button.
+        var controlsY = topRect.y + 66f;
+        var collapseRect = new Rect(topRect.xMax - CollapseButtonWidth, controlsY, CollapseButtonWidth,
+            TopControlHeight);
+        var toggleRect = new Rect(collapseRect.x - ValueToggleWidth - TopControlGap, controlsY, ValueToggleWidth,
+            TopControlHeight);
+        var countRect = new Rect(topRect.x, controlsY, Math.Max(160f, toggleRect.x - topRect.x - TopControlGap),
+            TopControlHeight);
 
-        var collapseRect = new Rect(topRect.xMax - CollapseButtonWidth, topRect.y + 62f, CollapseButtonWidth, 32f);
+        Text.Anchor = TextAnchor.MiddleLeft;
+        Widgets.Label(countRect, "VXP.FoundPatches".Translate($"{filteredRecords.Count}/{patchRecords.Count}"));
+        Text.Anchor = TextAnchor.UpperLeft;
+
+        var previousIncludeXmlValues = includeXmlValues;
+        Widgets.CheckboxLabeled(toggleRect, "VXP.IncludeXmlValues".Translate(), ref includeXmlValues);
+        TooltipHandler.TipRegion(toggleRect, "VXP.IncludeXmlValuesTooltip".Translate());
+
+        if (previousIncludeXmlValues != includeXmlValues)
+        {
+            OnIncludeXmlValuesChanged();
+        }
+
         if (Widgets.ButtonText(collapseRect, "VXP.CollapseAll".Translate()))
         {
             CollapseAllVisible();
         }
 
         TooltipHandler.TipRegion(collapseRect, "VXP.CollapseAllTooltip".Translate());
-
-        var toggleRect = new Rect(collapseRect.x - ValueToggleWidth - 12f, topRect.y + 58f, ValueToggleWidth, 36f);
-        var previousIncludeXmlValues = includeXmlValues;
-        var listing = new Listing_Standard { ColumnWidth = toggleRect.width };
-        listing.Begin(toggleRect);
-        listing.CheckboxLabeled("VXP.IncludeXmlValues".Translate(), ref includeXmlValues,
-            "VXP.IncludeXmlValuesTooltip".Translate());
-        listing.End();
-
-        if (previousIncludeXmlValues != includeXmlValues)
-        {
-            OnIncludeXmlValuesChanged();
-        }
     }
 
     private void OnIncludeXmlValuesChanged()
@@ -123,10 +130,8 @@ internal partial class VisualXMLPatchesMod
 
     private static void DrawPatchRow(PatchRecord record, Rect rowRect, ref bool expanded)
     {
-        var displayIndex = record.Index + 1;
         var marker = record.HasDetails ? expanded ? "-" : "+" : " ";
-        var statusTag = record.Success ? string.Empty : " [FAIL]";
-        var label = $"{marker} #{displayIndex}: {record.PatchTypeDisplay}{statusTag} | {shorten(record.DisplayXPathSingleLine, 120)}";
+        var label = $"{marker} {record.RowText}";
 
         if (Mouse.IsOver(rowRect))
         {
@@ -138,7 +143,8 @@ internal partial class VisualXMLPatchesMod
             Widgets.DrawBoxSolid(rowRect, new Color(0.4f, 0f, 0f, 0.15f));
         }
 
-        var openRect = new Rect(rowRect.xMax - OpenWidth, rowRect.y + 4f, OpenWidth - 4f, RowHeight - 8f);
+        var openRect = new Rect(rowRect.xMax - OpenWidth, rowRect.y + ((rowRect.height - OpenButtonHeight) / 2f),
+            OpenWidth - 4f, OpenButtonHeight);
         if (!string.IsNullOrEmpty(record.SourceFile))
         {
             if (Widgets.ButtonText(openRect, "VXP.Open".Translate()))
@@ -149,7 +155,8 @@ internal partial class VisualXMLPatchesMod
             TooltipHandler.TipRegion(openRect, record.SourceFile);
         }
 
-        var labelRectRow = new Rect(rowRect.x + 4f, rowRect.y, rowRect.width - OpenWidth - 4f, RowHeight);
+        var labelRectRow = new Rect(rowRect.x + RowHorizontalPadding, rowRect.y + 2f, GetPatchRowTextWidth(rowRect.width),
+            Math.Max(1f, rowRect.height - 4f));
         Text.Anchor = TextAnchor.MiddleLeft;
         if (record.HasDetails && Widgets.ButtonInvisible(labelRectRow))
         {
@@ -170,7 +177,7 @@ internal partial class VisualXMLPatchesMod
         }
 
         var oldWrap = Text.WordWrap;
-        Text.WordWrap = false;
+        Text.WordWrap = true;
         Widgets.Label(labelRectRow, label);
         Text.WordWrap = oldWrap;
         if (record.Failed)
@@ -178,7 +185,7 @@ internal partial class VisualXMLPatchesMod
             GUI.color = Color.white;
         }
 
-        TooltipHandler.TipRegion(labelRectRow, record.DisplayXPath);
+        TooltipHandler.TipRegion(labelRectRow, record.RowTooltip);
         Text.Anchor = TextAnchor.UpperLeft;
     }
 

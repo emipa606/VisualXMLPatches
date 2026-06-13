@@ -29,11 +29,18 @@ internal partial class VisualXMLPatchesMod : Mod
     private const float HeaderHeight = 40f;
     private const float RowHeight = 32f;
     private const float OpenWidth = 60f;
+    private const float OpenButtonHeight = 24f;
+    private const float OpenButtonGap = 8f;
+    private const float RowHorizontalPadding = 4f;
+    private const float RowVerticalPadding = 6f;
     private const float DetailIndent = 24f;
     private const float DetailRightPadding = OpenWidth + 20f;
     private const float CollapseButtonWidth = 110f;
     private const float ValueToggleWidth = 280f;
+    private const float TopControlHeight = 32f;
+    private const float TopControlGap = 12f;
     private const float SearchDebounceSeconds = 0.25f;
+    private const int MaxPatchRowLines = 3;
     private const int MinXmlValueSearchLength = 2;
     private static string currentVersion;
     private static VisualXMLPatchesSettings settings;
@@ -71,6 +78,8 @@ internal partial class VisualXMLPatchesMod : Mod
     private static string appliedSearchQuery = string.Empty;
     private static float lastSearchEditTime = -1f;
     private static bool includeXmlValues;
+    private static float cachedRowLineHeight = -1f;
+    private static float cachedAverageRowCharacterWidth = -1f;
 
     // XmlWriterSettings allocation used to happen as part of value formatting.
     // Keep one settings instance because formatting may still run for expanded rows.
@@ -128,7 +137,7 @@ internal partial class VisualXMLPatchesMod : Mod
         // right-side Open buttons. Use the same width for height calculation and
         // drawing so wrapped details cannot overlap later rows.
         var detailsWidth = Math.Max(120f, viewWidth - DetailIndent - DetailRightPadding);
-        var totalHeightCalc = CalculateTotalHeight(detailsWidth);
+        var totalHeightCalc = CalculateTotalHeight(detailsWidth, viewWidth);
         var viewRect = new Rect(0f, 0f, viewWidth, Math.Max(totalHeightCalc + 10f, outRect.height - 1f));
         // The scroll view may contain tens of thousands of rows. We still advance
         // curY for layout correctness, but only draw controls that intersect the
@@ -157,19 +166,21 @@ internal partial class VisualXMLPatchesMod : Mod
             {
                 var record = group.Records[i];
                 var expanded = expandedPatches.Contains(record.Index);
-                var rowRect = new Rect(8f, curY, viewRect.width - 8f, RowHeight);
+                var rowWidth = GetPatchRowWidth(record, viewRect.width);
+                var rowTextWidth = GetPatchRowTextWidth(rowWidth);
+                var rowHeight = GetPatchRowHeight(record, rowTextWidth);
+                var rowRect = new Rect(8f, curY, rowWidth, rowHeight);
                 if (string.IsNullOrEmpty(record.SourceFile))
                 {
                     rowRect.x += 10f;
-                    rowRect.width -= 10f;
                 }
 
-                if (IsVisible(curY, RowHeight, visibleTop, visibleBottom))
+                if (IsVisible(curY, rowHeight, visibleTop, visibleBottom))
                 {
                     DrawPatchRow(record, rowRect, ref expanded);
                 }
 
-                curY += RowHeight;
+                curY += rowHeight;
                 if (!expanded || !record.HasDetails)
                 {
                     continue;
