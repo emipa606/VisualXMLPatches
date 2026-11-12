@@ -165,7 +165,16 @@ internal partial class VisualXMLPatchesMod
 
     private static void DrawPatchRow(PatchRecord record, Rect rowRect, ref bool expanded)
     {
-        var marker = record.HasDetails ? expanded ? "-" : "+" : " ";
+        string marker;
+        if (record.HasDetails)
+        {
+            marker = expanded ? "-" : "+";
+        }
+        else
+        {
+            marker = " ";
+        }
+
         var label = $"{marker} {record.RowText}";
 
         if (Mouse.IsOver(rowRect))

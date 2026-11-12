@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using UnityEngine;
 
 namespace VisualXMLPatches;
@@ -71,12 +72,9 @@ internal partial class VisualXMLPatchesMod
         }
         else
         {
-            foreach (var record in patchRecords)
+            foreach (var record in patchRecords.Where(record => MatchesSearch(record, query)))
             {
-                if (MatchesSearch(record, query))
-                {
-                    filteredRecords.Add(record);
-                }
+                filteredRecords.Add(record);
             }
         }
 

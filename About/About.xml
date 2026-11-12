@@ -8,6 +8,7 @@
     <li>1.4</li>
     <li>1.5</li>
     <li>1.6</li>
+    <li>1.7</li>
   </supportedVersions>
   <modDependencies>
     <li>
@@ -28,6 +29,8 @@ If a patch is not applied due to some error, this will be marked in red.
 
 I made it mostly for my own use but hopefully this will be of some use to someone!
 Using this and the [url= https://steamcommunity.com/sharedfiles/filedetails/?id=2363322287]Unified XML Export[/url] makes XML debugging much easier!
+
+Thanks to flumignano for the performance fixes!
 
 [table]
     [tr]
@@ -56,6 +59,6 @@ Since modding is just a hobby for me I expect no donations to keep modding. If y
 [*] Use [url=https://github.com/RimSort/RimSort/releases/latest]RimSort[/url] to sort your mods
 [/list] 
 
-[url=https://steamcommunity.com/sharedfiles/filedetails/changelog/3570531169][img]https://img.shields.io/github/v/release/emipa606/VisualXMLPatches?label=latest%20version&amp;style=plastic&amp;labelColor=0070cd&amp;color=white[/img][/url] | tags: mod troubleshooting, error identification</description>
-  <modVersion IgnoreIfNoMatchingField="True">1.6.2</modVersion>
+[url=https://steamcommunity.com/sharedfiles/filedetails/changelog/3570531169][img]https://img.shields.io/github/v/release/emipa606/VisualXMLPatches?label=latest%20version&amp;style=plastic&amp;labelColor=0070cd&amp;color=white[/img][/url] | error identification, mod troubleshooting</description>
+  <modVersion IgnoreIfNoMatchingField="True">1.7.0</modVersion>
 </ModMetaData>

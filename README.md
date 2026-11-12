@@ -9,6 +9,8 @@ If a patch is not applied due to some error, this will be marked in red.
 I made it mostly for my own use but hopefully this will be of some use to someone!
 Using this and the [Unified XML Export]( https://steamcommunity.com/sharedfiles/filedetails/?id=2363322287) makes XML debugging much easier!
 
+Thanks to flumignano for the performance fixes!
+
 ![Image](https://img.litet.net/logos/Self-SupportAndDonations.png)
 
 Since modding is just a hobby for me I expect no donations to keep modding. If you still want to show your support you can gift me anything from my [Wishlist](https://store.steampowered.com/wishlist/id/Mlie) or buy me a cup of tea.
@@ -29,4 +31,4 @@ Since modding is just a hobby for me I expect no donations to keep modding. If y
 
  
 
-[![Image](https://img.shields.io/github/v/release/emipa606/VisualXMLPatches?label=latest%20version&style=plastic&labelColor=0070cd&color=white)](https://steamcommunity.com/sharedfiles/filedetails/changelog/3570531169) | tags: mod troubleshooting, error identification
+[![Image](https://img.shields.io/github/v/release/emipa606/VisualXMLPatches?label=latest%20version&style=plastic&labelColor=0070cd&color=white)](https://steamcommunity.com/sharedfiles/filedetails/changelog/3570531169) | error identification, mod troubleshooting

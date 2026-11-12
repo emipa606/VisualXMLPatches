@@ -1,46 +1,82 @@
-# GitHub Copilot Instructions for Visual XML Patches
+# GitHub Copilot Instructions for Visual XML Patches Mod
 
 ## Mod Overview and Purpose
-
-**Mod Name:** Visual XML Patches  
-**Author:** Mlie  
-**PackageId:** Mlie.VisualXMLPatches  
-
-Visual XML Patches is a mod for RimWorld designed to enhance the XML debugging process. It provides a visual representation of XML patches loaded into the game, showing the order of application, the originating mod, and allowing direct access to the relevant files. Errors in patch application are prominently flagged, making it easier to identify and resolve issues. While primarily created for personal use, this tool is intended to benefit any mod developer through more efficient XML debugging, especially when used alongside the Unified XML Export mod.
+Visual XML Patches is a RimWorld mod that provides a visual representation of XML patches loaded in the game. The primary goal of this mod is to assist users in debugging XML issues by displaying the order of patch application, the mod responsible for each patch, and the ability to open the relevant source files. Additionally, it highlights patches that were not applied due to errors.
 
 ## Key Features and Systems
-
-- **Visual Patch Order:** Displays the sequence in which XML patches are applied in the game.
-- **Source Identification:** Highlights which mod each patch originates from.
-- **Error Detection:** Marks unapplied patches in red if an error occurs.
-- **File Access:** Provides functionality to directly open the XML file where a patch is defined.
-- **Integration with Unified XML Export:** When used together, both mods can significantly streamline the XML debugging process.
+- **Patch Visualization**: Displays the order of XML patches applied, along with the mod responsible for each patch.
+- **Error Detection**: Highlights patches that failed to apply due to errors.
+- **File Navigation**: Allows users to open the relevant source files for each patch.
+- **Settings Interface**: Provides a settings window to configure mod options.
 
 ## Coding Patterns and Conventions
-
-- **Namespace Organization:** Keep all classes within the `VisualXMLPatches` namespace.
-- **Class Structure:** Critical classes such as `PatchOperation_Apply`, `PatchRecord`, and various helper classes are used to manage the patch display and operations.
-- **Method Naming:** Methods adhere to descriptive naming conventions, reflecting their purpose (e.g., `addRowWrapBreaks`, `BuildPatchRowTooltip`).
-- **Extension Methods:** Use extension methods where appropriate to enhance readability and functionality.
+- **C# Classes and Methods**: The mod is written in C# and follows the standard .NET naming conventions for classes and methods.
+- **Harmony Patching**: Utilizes the Harmony library for patching game methods, ensuring compatibility with RimWorld's modding framework.
+- **Mod Settings**: Implements a settings window for user configuration using RimWorld's built-in settings system.
 
 ## XML Integration
-
-- Although the primary logic of this mod is handled in C#, there should be preparedness for potential XML configuration files in future development.
-- Consider XML-loading patterns, ensuring efficient parsing and error handling mechanisms are in place for further integrations.
+The mod does not directly interact with XML files. Instead, it leverages RimWorld's XML parsing and patching mechanisms to visualize the loaded patches.
 
 ## Harmony Patching
-
-- **Dependency:** The mod relies on `brrainz.harmony` for runtime patching.
-- **Patch Definitions:** Utilize harmony to apply postfixes and prefixes, such as those in `PatchOperation_Apply`, to modify and enhance game behavior without altering the original source code.
+The mod uses Harmony to patch specific game methods to inject custom behavior for visualizing XML patches. Key patched methods include:
+- `PatchOperation_Apply`: Used to track and visualize the application of XML patches.
+- `PatchGroupView`: Manages the display of patch groups in the game interface.
 
 ## Suggestions for Copilot
+To optimize Copilot's performance and accuracy in this mod, consider the following suggestions:
+1. **Code Snippets**: Provide code snippets for common Harmony patches and XML parsing tasks.
+2. **Documentation**: Include comments and documentation within the code to explain patching logic and visualization techniques.
+3. **Examples**: Share examples of successful XML patch debugging sessions to illustrate the mod's utility.
+4. **Best Practices**: Offer guidelines for writing and applying XML patches to ensure compatibility with the mod.
 
-- **Real-Time Code Suggestions:** Utilize Copilot to propose code formats adhering to established conventions, like method signatures or class definition skeletons.
-- **Error Handling Routines:** Leverage Copilot to suggest improvements or optimizations in try-catch blocks to handle XML parsing errors.
-- **Documentation Assistance:** Allow Copilot to assist in generating comprehensive comments and inline documentation, enhancing code maintainability.
-- **Code Reusability:** Employ Copilot’s pattern-matching capabilities to identify opportunities for method extraction, optimizing code reuse within similar classes.
+## Example C# Code Structure
+csharp
+// PatchOperation_Apply.cs
+public class PatchOperation_Apply
+{
+    public void Postfix()
+    {
+        // Logic to visualize patch application
+    }
 
-By adhering to these detailed guidelines, Copilot can effectively contribute to the development, maintenance, and enhancement of the Visual XML Patches mod. This structured approach ensures the mod's stability, usability, and future expandability as a valuable tool in the RimWorld modding community.
+    public void Prefix()
+    {
+        // Logic to track patch application
+    }
+}
+
+
+csharp
+// PatchRecord.cs
+public class PatchRecord
+{
+    public bool HasDetails()
+    {
+        // Logic to check if patch has detailed information
+        return true;
+    }
+}
+
+
+csharp
+// VisualXMLPatchesMod.cs
+public class VisualXMLPatchesMod : Mod
+{
+    public VisualXMLPatchesMod(ModContentPack content) : base(content) {}
+
+    public override void DoSettingsWindowContents(Rect inRect)
+    {
+        // Logic for mod settings window
+    }
+
+    public override string SettingsCategory()
+    {
+        return "Visual XML Patches";
+    }
+}
+
+
+By following these conventions and suggestions, Copilot can effectively assist in the development and maintenance of the Visual XML Patches mod.
 
 ## Project Solution Guidelines
 - Relevant mod XML files are included as Solution Items under the solution folder named XML, these can be read and modified from within the solution.
@@ -54,4 +90,6 @@ By adhering to these detailed guidelines, Copilot can effectively contribute to 
 ## Hard rules (must follow)
 - Do NOT run commands that modify the repo (no git commit, git apply, dotnet format) unless explicitly asked.
 - Prefer minimal reads: read only the smallest code region needed (around the suspicious lines).
+- When mentioning SonarQube issues, automatically use the SonarQube MCP service to fetch and address issues instead of making inferred fixes without querying SonarQube first.
+- When mentioning the rimworld log, automatically use the Rimworld MCP service to fetch the log.
 

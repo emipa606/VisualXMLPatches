@@ -6,7 +6,7 @@ using Verse;
 namespace VisualXMLPatches;
 
 [StaticConstructorOnStartup]
-public class VisualXMLPatches
+public static class VisualXMLPatches
 {
     public static List<PatchOperation> Patches;
     public static List<bool> Results = [];

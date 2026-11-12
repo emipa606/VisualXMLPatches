@@ -114,13 +114,24 @@ internal partial class VisualXMLPatchesMod
         var attribute = patch == null ? string.Empty : getPatchAttribute(patch);
         var modsSummary = patch == null ? string.Empty : getPatchMods(patch);
         var operationsSummary = patch == null ? string.Empty : getPatchOperationsSummary(patch);
-        var displayXPath = xpath == "VXP.NoXPath".Translate()
-            ? !string.IsNullOrEmpty(operationsSummary)
-                ? operationsSummary
-                : !string.IsNullOrEmpty(modsSummary)
+        string displayXPath;
+        if (xpath == "VXP.NoXPath".Translate())
+        {
+            if (!string.IsNullOrEmpty(operationsSummary))
+            {
+                displayXPath = operationsSummary;
+            }
+            else
+            {
+                displayXPath = !string.IsNullOrEmpty(modsSummary)
                     ? modsSummary
-                    : xpath
-            : xpath;
+                    : xpath;
+            }
+        }
+        else
+        {
+            displayXPath = xpath;
+        }
 
         var record = new PatchRecord
         {

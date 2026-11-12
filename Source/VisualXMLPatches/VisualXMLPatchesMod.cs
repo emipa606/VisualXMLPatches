@@ -102,14 +102,15 @@ internal partial class VisualXMLPatchesMod : Mod
         return "Visual XML Patches";
     }
 
-    public override void DoSettingsWindowContents(Rect rect)
+    public override void DoSettingsWindowContents(Rect inRect)
     {
         // All expensive data preparation below is guarded. With large mod lists this
         // prevents an idle settings window from repeatedly redoing search/group work.
         EnsurePatchIndex();
 
-        var topRect = new Rect(rect.x, rect.y, rect.width, TopAreaHeight);
-        var lowerRect = new Rect(rect.x, rect.y + TopAreaHeight + 6f, rect.width, rect.height - TopAreaHeight - 6f);
+        var topRect = new Rect(inRect.x, inRect.y, inRect.width, TopAreaHeight);
+        var lowerRect = new Rect(inRect.x, inRect.y + TopAreaHeight + 6f, inRect.width,
+            inRect.height - TopAreaHeight - 6f);
 
         var searchLabelRect = new Rect(topRect.x, topRect.y, topRect.width, 24f);
         Widgets.Label(searchLabelRect,
@@ -186,6 +187,6 @@ internal partial class VisualXMLPatchesMod : Mod
         }
 
         Widgets.EndScrollView();
-        DrawVersion(rect);
+        DrawVersion(inRect);
     }
 }

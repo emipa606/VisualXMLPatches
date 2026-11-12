@@ -147,12 +147,9 @@ internal partial class VisualXMLPatchesMod
             yield break;
         }
 
-        foreach (var op in enumOps)
+        foreach (var op in enumOps.Where(op => op != null))
         {
-            if (op != null)
-            {
-                yield return op;
-            }
+            yield return op;
         }
     }
 
